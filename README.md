@@ -13,6 +13,12 @@ Both clients authenticate via a shared token and reconnect automatically on conn
 
 ## Features
 
+### Login
+
+Both clients authenticate with a shared token. Set `TERMINAL_BRIDGE_AUTH_TOKEN` in the client-ai `.env` file to auto-connect and bypass this screen.
+
+![Login Screen](docs/screenshots/terminal.png)
+
 ### Web Terminal
 
 - Full xterm.js terminal with WebGL rendering
@@ -21,9 +27,6 @@ Both clients authenticate via a shared token and reconnect automatically on conn
 - Mobile-friendly key bar (Ctrl, Alt, Tab, arrow keys, Esc)
 - Auto-resize to browser viewport
 - Exponential backoff reconnection (1s → 30s)
-
-<!-- Screenshot: Terminal client showing a tmux session -->
-![Terminal Client](docs/screenshots/terminal.png)
 
 ### AI Chat
 
@@ -36,29 +39,7 @@ Both clients authenticate via a shared token and reconnect automatically on conn
 - Permission request dialogs for tool authorization
 - Interrupt/stop button for in-flight queries
 
-<!-- Screenshot: AI chat showing a response with code block and tool use -->
-![AI Chat](docs/screenshots/ai-chat.png)
-
-### Theme System
-
-Four built-in themes, all using CSS custom properties. Theme selection persists across sessions via localStorage.
-
-| Theme | Description |
-|-------|-------------|
-| **Dark** (default) | Deep charcoal with purple accents |
-| **Neon Heist** | Deep purple base with magenta/neon green accents |
-| **Neon Ice** | Deep navy with electric blue accents |
-| **Vanilla** | Light cream with navy accents |
-
-<!-- Screenshot: Side-by-side of all 4 themes -->
-![Themes](docs/screenshots/themes.png)
-
-### Settings Panel
-
-Slide-over panel from the left, triggered by the gear icon in the header. Currently houses the theme selector. Closes on overlay click or Escape key.
-
-<!-- Screenshot: Settings panel open with theme selector -->
-![Settings Panel](docs/screenshots/settings-panel.png)
+![AI Chat — Response with markdown table and token summary](docs/screenshots/ai-chat.png)
 
 ### Animated Thinking Indicator
 
@@ -68,25 +49,24 @@ While the AI is processing, an animated indicator appears inline in the chat are
 - Cycling through 155+ humorous keyword phrases ("Consulting the void...", "Tickling tensors...", "Collapsing wavefunctions...")
 - Text uses a shimmer animation matching the theme's accent color
 
-<!-- Screenshot: Thinking animation with shimmer text -->
-![Thinking Animation](docs/screenshots/thinking-animation.png)
+![Thinking Animation — shimmer text with sparkle star](docs/screenshots/thinking-animation.png)
 
-### Response Bubbles
+### Settings Panel
 
-- User messages in right-aligned bubbles with accent-colored borders
-- Assistant messages in left-aligned bubbles with animated glow border (latest response only)
-- Older responses get a static border
-- Result summary with token counts, random completion keyword, and formatted duration
+Slide-over panel from the left, triggered by the gear icon in the header. Contains the theme selector. Closes on overlay click or Escape key.
 
-<!-- Screenshot: Chat showing user and assistant bubbles -->
-![Message Bubbles](docs/screenshots/bubbles.png)
+![Settings Panel — theme selector](docs/screenshots/settings-panel.png)
 
-### Auto-Connect
+### Theme System
 
-When `TERMINAL_BRIDGE_AUTH_TOKEN` is set in the client-ai `.env` file, the AI chat client bypasses the login screen and connects automatically.
+Four built-in themes, all using CSS custom properties. Theme persists across sessions via localStorage.
 
-<!-- Screenshot: Login screen -->
-![Login Screen](docs/screenshots/login.png)
+| Theme | Preview |
+|-------|---------|
+| **Dark** (default) — Deep charcoal with purple accents | ![Dark](docs/screenshots/theme-dark.png) |
+| **Neon Heist** — Deep purple with magenta/neon green | ![Neon Heist](docs/screenshots/theme-neon-heist.png) |
+| **Neon Ice** — Deep navy with electric blue | ![Neon Ice](docs/screenshots/theme-neon-ice.png) |
+| **Vanilla** — Light cream with navy accents | ![Vanilla](docs/screenshots/theme-vanilla.png) |
 
 ---
 
@@ -94,7 +74,7 @@ When `TERMINAL_BRIDGE_AUTH_TOKEN` is set in the client-ai `.env` file, the AI ch
 
 ```
 ┌─────────────┐     ┌─────────────┐
-│  Terminal    │     │  AI Chat    │
+│  Terminal   │     │  AI Chat    │
 │  Client     │     │  Client     │
 │  (xterm.js) │     │  (React)    │
 └──────┬──────┘     └──────┬──────┘
@@ -193,23 +173,23 @@ Vite dev servers proxy WebSocket and API requests to the server on :3001.
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `TERMINAL_BRIDGE_AUTH_TOKEN` | Yes | `change-me-immediately` | Shared auth token for WebSocket connections |
-| `ANTHROPIC_API_KEY` | Yes | — | Claude API key for AI provider |
-| `PORT` | No | `3001` | Server HTTP port |
+| Variable                     | Required | Default                 | Description                                 |
+| ---------------------------- | -------- | ----------------------- | ------------------------------------------- |
+| `TERMINAL_BRIDGE_AUTH_TOKEN` | Yes      | `change-me-immediately` | Shared auth token for WebSocket connections |
+| `ANTHROPIC_API_KEY`          | Yes      | —                       | Claude API key for AI provider              |
+| `PORT`                       | No       | `3001`                  | Server HTTP port                            |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Terminal client | React 19, xterm.js 5, WebGL addon, Vite 7 |
-| AI chat client | React 19, react-markdown, remark-gfm, rehype-highlight, highlight.js, Vite 7 |
-| Server | Express 4, ws 8, node-pty, Claude Agent SDK |
-| Shared | TypeScript ~5.9, ESM throughout |
-| Linting | ESLint 9 (flat config), Prettier |
+| Layer           | Technology                                                                   |
+| --------------- | ---------------------------------------------------------------------------- |
+| Terminal client | React 19, xterm.js 5, WebGL addon, Vite 7                                    |
+| AI chat client  | React 19, react-markdown, remark-gfm, rehype-highlight, highlight.js, Vite 7 |
+| Server          | Express 4, ws 8, node-pty, Claude Agent SDK                                  |
+| Shared          | TypeScript ~5.9, ESM throughout                                              |
+| Linting         | ESLint 9 (flat config), Prettier                                             |
 
 ---
 
