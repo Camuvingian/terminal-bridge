@@ -6,9 +6,10 @@
     "scripts": {
         "format": "prettier --write . && eslint . --fix",
         "lint": "eslint .",
-        "build": "cd client && npm run build && cd ../server && npm run build",
+        "build": "cd client && npm run build && cd ../client-ai && npm run build && cd ../server && npm run build",
         "dev:server": "cd server && npm run dev",
         "dev:client": "cd client && npm run dev",
+        "dev:client-ai": "cd client-ai && npm run dev",
         "start": "cd server && npm start"
     },
     "devDependencies": {

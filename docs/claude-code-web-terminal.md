@@ -91,26 +91,26 @@ claude-web-terminal/
 
 ```json
 {
-  "name": "claude-web-terminal-server",
-  "version": "1.0.0",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.16.0",
-    "node-pty": "^1.0.0",
-    "cors": "^2.8.5"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/ws": "^8.5.10",
-    "@types/cors": "^2.8.17",
-    "typescript": "^5.3.0",
-    "ts-node": "^10.9.2"
-  }
+    "name": "claude-web-terminal-server",
+    "version": "1.0.0",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/server.js",
+        "dev": "ts-node src/server.ts"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "ws": "^8.16.0",
+        "node-pty": "^1.0.0",
+        "cors": "^2.8.5"
+    },
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/ws": "^8.5.10",
+        "@types/cors": "^2.8.17",
+        "typescript": "^5.3.0",
+        "ts-node": "^10.9.2"
+    }
 }
 ```
 
@@ -118,14 +118,14 @@ claude-web-terminal/
 
 ```json
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true
-  }
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "commonjs",
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "strict": true,
+        "esModuleInterop": true
+    }
 }
 ```
 
@@ -155,115 +155,122 @@ app.use(express.static(path.join(__dirname, '../../client/dist')));
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // SPA fallback — serve index.html for any non-API route
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
 });
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws: WebSocket, req) => {
-  // ------------------------------------
-  // AUTH: Reject unauthenticated clients
-  // ------------------------------------
-  const url = new URL(req.url || '', `http://${req.headers.host}`);
-  const token = url.searchParams.get('token');
+    // ------------------------------------
+    // AUTH: Reject unauthenticated clients
+    // ------------------------------------
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
 
-  if (token !== AUTH_TOKEN) {
-    ws.send('\r\n\x1b[31mAuthentication failed.\x1b[0m\r\n');
-    ws.close();
-    return;
-  }
-
-  console.log('[+] Client connected, spawning Claude Code...');
-
-  // ------------------------------------
-  // PTY: Spawn Claude Code in a real PTY
-  // ------------------------------------
-  // node-pty calls forkpty() on macOS, which allocates a proper
-  // pseudo-terminal device pair. Claude Code's isatty() returns true,
-  // so it launches its full TUI with colours, cursor movement, etc.
-  //
-  // We spawn tmux wrapping Claude Code so that:
-  //   1. The session persists if the WebSocket drops
-  //   2. You can attach multiple browser tabs to the same session
-  //   3. You can detach and switch to a raw shell if needed
-  const shell = pty.spawn('tmux', [
-    'new-session', '-A', '-s', 'claude-web'
-    // -A = attach if session exists, create if not
-    // -s = session name
-    // Claude Code is launched inside tmux manually or via .tmux.conf
-    // This way you get both Claude Code AND shell access
-  ], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd: process.env.HOME || '/Users/nick',
-    env: {
-      ...process.env,
-      TERM: 'xterm-256color',
-      // Ensure Claude Code picks up the API key
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
-    }
-  });
-
-  // ------------------------------------
-  // BRIDGE: PTY ↔ WebSocket
-  // ------------------------------------
-
-  // Claude Code TUI output → browser
-  // This includes all ANSI escape sequences (colours, cursor moves,
-  // screen clears, etc.) that xterm.js will interpret and render.
-  shell.onData((data: string) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(data);
-    }
-  });
-
-  // Browser keystrokes → Claude Code TUI input
-  // When you press a key in xterm.js, it sends the raw character(s)
-  // over the WebSocket. We write them into the PTY, and Claude Code
-  // receives them exactly as if you pressed them on a physical keyboard.
-  ws.on('message', (msg: Buffer | string) => {
-    const data = msg.toString();
-
-    // Check if it's a control message (JSON) for resize events
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed.type === 'resize' && parsed.cols && parsed.rows) {
-        shell.resize(parsed.cols, parsed.rows);
+    if (token !== AUTH_TOKEN) {
+        ws.send('\r\n\x1b[31mAuthentication failed.\x1b[0m\r\n');
+        ws.close();
         return;
-      }
-    } catch {
-      // Not JSON — it's raw terminal input, pass it through
     }
 
-    shell.write(data);
-  });
+    console.log('[+] Client connected, spawning Claude Code...');
 
-  // Cleanup when the browser disconnects
-  ws.on('close', () => {
-    console.log('[-] Client disconnected');
-    // Don't kill the PTY — tmux keeps the session alive.
-    // Next connection will reattach to the same session.
-    // If you want to kill on disconnect, uncomment:
-    // shell.kill();
-  });
+    // ------------------------------------
+    // PTY: Spawn Claude Code in a real PTY
+    // ------------------------------------
+    // node-pty calls forkpty() on macOS, which allocates a proper
+    // pseudo-terminal device pair. Claude Code's isatty() returns true,
+    // so it launches its full TUI with colours, cursor movement, etc.
+    //
+    // We spawn tmux wrapping Claude Code so that:
+    //   1. The session persists if the WebSocket drops
+    //   2. You can attach multiple browser tabs to the same session
+    //   3. You can detach and switch to a raw shell if needed
+    const shell = pty.spawn(
+        'tmux',
+        [
+            'new-session',
+            '-A',
+            '-s',
+            'claude-web',
+            // -A = attach if session exists, create if not
+            // -s = session name
+            // Claude Code is launched inside tmux manually or via .tmux.conf
+            // This way you get both Claude Code AND shell access
+        ],
+        {
+            name: 'xterm-256color',
+            cols: 80,
+            rows: 24,
+            cwd: process.env.HOME || '/Users/nick',
+            env: {
+                ...process.env,
+                TERM: 'xterm-256color',
+                // Ensure Claude Code picks up the API key
+                ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+            },
+        },
+    );
 
-  // Cleanup if the PTY process dies
-  shell.onExit(({ exitCode }) => {
-    console.log(`[!] PTY exited with code ${exitCode}`);
-    ws.close();
-  });
+    // ------------------------------------
+    // BRIDGE: PTY ↔ WebSocket
+    // ------------------------------------
+
+    // Claude Code TUI output → browser
+    // This includes all ANSI escape sequences (colours, cursor moves,
+    // screen clears, etc.) that xterm.js will interpret and render.
+    shell.onData((data: string) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(data);
+        }
+    });
+
+    // Browser keystrokes → Claude Code TUI input
+    // When you press a key in xterm.js, it sends the raw character(s)
+    // over the WebSocket. We write them into the PTY, and Claude Code
+    // receives them exactly as if you pressed them on a physical keyboard.
+    ws.on('message', (msg: Buffer | string) => {
+        const data = msg.toString();
+
+        // Check if it's a control message (JSON) for resize events
+        try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'resize' && parsed.cols && parsed.rows) {
+                shell.resize(parsed.cols, parsed.rows);
+                return;
+            }
+        } catch {
+            // Not JSON — it's raw terminal input, pass it through
+        }
+
+        shell.write(data);
+    });
+
+    // Cleanup when the browser disconnects
+    ws.on('close', () => {
+        console.log('[-] Client disconnected');
+        // Don't kill the PTY — tmux keeps the session alive.
+        // Next connection will reattach to the same session.
+        // If you want to kill on disconnect, uncomment:
+        // shell.kill();
+    });
+
+    // Cleanup if the PTY process dies
+    shell.onExit(({ exitCode }) => {
+        console.log(`[!] PTY exited with code ${exitCode}`);
+        ws.close();
+    });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Claude Web Terminal running on http://0.0.0.0:${PORT}`);
-  console.log(`Auth token: ${AUTH_TOKEN}`);
+    console.log(`Claude Web Terminal running on http://0.0.0.0:${PORT}`);
+    console.log(`Auth token: ${AUTH_TOKEN}`);
 });
 ```
 
@@ -287,11 +294,11 @@ Or spawn it directly without tmux if you don't care about session persistence:
 
 ```typescript
 const shell = pty.spawn('claude', [], {
-  name: 'xterm-256color',
-  cols: 80,
-  rows: 24,
-  cwd: process.env.HOME || '/Users/nick',
-  env: { ...process.env, TERM: 'xterm-256color' }
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: process.env.HOME || '/Users/nick',
+    env: { ...process.env, TERM: 'xterm-256color' },
 });
 ```
 
@@ -303,28 +310,28 @@ const shell = pty.spawn('claude', [], {
 
 ```json
 {
-  "name": "claude-web-terminal-client",
-  "version": "1.0.0",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@xterm/xterm": "^5.5.0",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-web-links": "^0.11.0",
-    "@xterm/addon-webgl": "^0.18.0"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.3.0",
-    "vite": "^5.0.0"
-  }
+    "name": "claude-web-terminal-client",
+    "version": "1.0.0",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "@xterm/xterm": "^5.5.0",
+        "@xterm/addon-fit": "^0.10.0",
+        "@xterm/addon-web-links": "^0.11.0",
+        "@xterm/addon-webgl": "^0.18.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@vitejs/plugin-react": "^4.2.0",
+        "typescript": "^5.3.0",
+        "vite": "^5.0.0"
+    }
 }
 ```
 
@@ -335,12 +342,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/api': 'http://localhost:3001',
-    }
-  }
+    plugins: [react()],
+    server: {
+        proxy: {
+            '/api': 'http://localhost:3001',
+        },
+    },
 });
 ```
 
@@ -348,16 +355,16 @@ export default defineConfig({
 
 ```json
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "esModuleInterop": true,
-    "outDir": "./dist"
-  },
-  "include": ["src"]
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "jsx": "react-jsx",
+        "strict": true,
+        "esModuleInterop": true,
+        "outDir": "./dist"
+    },
+    "include": ["src"]
 }
 ```
 
@@ -370,9 +377,9 @@ import App from './App';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>,
 );
 ```
 
@@ -385,82 +392,75 @@ import Terminal from './Terminal';
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 const App: React.FC = () => {
-  const [state, setState] = useState<ConnectionState>('disconnected');
-  const [token, setToken] = useState<string>('');
-  const [error, setError] = useState<string>('');
+    const [state, setState] = useState<ConnectionState>('disconnected');
+    const [token, setToken] = useState<string>('');
+    const [error, setError] = useState<string>('');
 
-  const handleConnect = () => {
-    if (!token.trim()) {
-      setError('Enter auth token');
-      return;
+    const handleConnect = () => {
+        if (!token.trim()) {
+            setError('Enter auth token');
+            return;
+        }
+        setError('');
+        setState('connecting');
+    };
+
+    const handleDisconnect = () => {
+        setState('disconnected');
+    };
+
+    const handleError = (msg: string) => {
+        setError(msg);
+        setState('error');
+    };
+
+    const handleConnected = () => {
+        setState('connected');
+    };
+
+    // Login screen
+    if (state === 'disconnected' || state === 'error') {
+        return (
+            <div className="login-container">
+                <div className="login-card">
+                    <div className="login-header">
+                        <span className="login-icon">▸</span>
+                        <h1>Claude Terminal</h1>
+                    </div>
+                    <p className="login-subtitle">Web proxy into Claude Code on your Mac Mini</p>
+                    <input
+                        type="password"
+                        className="token-input"
+                        placeholder="Auth token"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+                        autoFocus
+                    />
+                    {error && <p className="error-text">{error}</p>}
+                    <button className="connect-btn" onClick={handleConnect}>
+                        Connect
+                    </button>
+                </div>
+            </div>
+        );
     }
-    setError('');
-    setState('connecting');
-  };
 
-  const handleDisconnect = () => {
-    setState('disconnected');
-  };
-
-  const handleError = (msg: string) => {
-    setError(msg);
-    setState('error');
-  };
-
-  const handleConnected = () => {
-    setState('connected');
-  };
-
-  // Login screen
-  if (state === 'disconnected' || state === 'error') {
+    // Terminal view
     return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="login-header">
-            <span className="login-icon">▸</span>
-            <h1>Claude Terminal</h1>
-          </div>
-          <p className="login-subtitle">
-            Web proxy into Claude Code on your Mac Mini
-          </p>
-          <input
-            type="password"
-            className="token-input"
-            placeholder="Auth token"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-            autoFocus
-          />
-          {error && <p className="error-text">{error}</p>}
-          <button className="connect-btn" onClick={handleConnect}>
-            Connect
-          </button>
+        <div className="terminal-container">
+            <div className="terminal-header">
+                <span className="terminal-title">
+                    <span className="status-dot" />
+                    Claude Code — Mac Mini
+                </span>
+                <button className="disconnect-btn" onClick={handleDisconnect}>
+                    ✕
+                </button>
+            </div>
+            <Terminal token={token} onConnected={handleConnected} onError={handleError} onDisconnect={handleDisconnect} />
         </div>
-      </div>
     );
-  }
-
-  // Terminal view
-  return (
-    <div className="terminal-container">
-      <div className="terminal-header">
-        <span className="terminal-title">
-          <span className="status-dot" />
-          Claude Code — Mac Mini
-        </span>
-        <button className="disconnect-btn" onClick={handleDisconnect}>
-          ✕
-        </button>
-      </div>
-      <Terminal
-        token={token}
-        onConnected={handleConnected}
-        onError={handleError}
-        onDisconnect={handleDisconnect}
-      />
-    </div>
-  );
 };
 
 export default App;
@@ -479,156 +479,155 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
-  token: string;
-  onConnected: () => void;
-  onError: (msg: string) => void;
-  onDisconnect: () => void;
+    token: string;
+    onConnected: () => void;
+    onError: (msg: string) => void;
+    onDisconnect: () => void;
 }
 
-const Terminal: React.FC<TerminalProps> = ({
-  token,
-  onConnected,
-  onError,
-  onDisconnect,
-}) => {
-  const termRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
+const Terminal: React.FC<TerminalProps> = ({ token, onConnected, onError, onDisconnect }) => {
+    const termRef = useRef<HTMLDivElement>(null);
+    const xtermRef = useRef<XTerm | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
+    const fitRef = useRef<FitAddon | null>(null);
 
-  useEffect(() => {
-    if (!termRef.current) return;
+    useEffect(() => {
+        if (!termRef.current) return;
 
-    // -----------------------------------------
-    // 1. Create the xterm.js terminal instance
-    // -----------------------------------------
-    const term = new XTerm({
-      cursorBlink: true,
-      cursorStyle: 'block',
-      fontSize: 14,
-      fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
-      theme: {
-        background: '#0d1117',
-        foreground: '#e6edf3',
-        cursor: '#58a6ff',
-        selectionBackground: '#264f78',
-        black: '#484f58',
-        red: '#ff7b72',
-        green: '#7ee787',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#bc8cff',
-        cyan: '#76e3ea',
-        white: '#e6edf3',
-      },
-      allowProposedApi: true,
-      scrollback: 10000,
-    });
+        // -----------------------------------------
+        // 1. Create the xterm.js terminal instance
+        // -----------------------------------------
+        const term = new XTerm({
+            cursorBlink: true,
+            cursorStyle: 'block',
+            fontSize: 14,
+            fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
+            theme: {
+                background: '#0d1117',
+                foreground: '#e6edf3',
+                cursor: '#58a6ff',
+                selectionBackground: '#264f78',
+                black: '#484f58',
+                red: '#ff7b72',
+                green: '#7ee787',
+                yellow: '#d29922',
+                blue: '#58a6ff',
+                magenta: '#bc8cff',
+                cyan: '#76e3ea',
+                white: '#e6edf3',
+            },
+            allowProposedApi: true,
+            scrollback: 10000,
+        });
 
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+        const fitAddon = new FitAddon();
+        const webLinksAddon = new WebLinksAddon();
 
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-    term.open(termRef.current);
+        term.loadAddon(fitAddon);
+        term.loadAddon(webLinksAddon);
+        term.open(termRef.current);
 
-    // Try WebGL renderer for performance (falls back to canvas)
-    try {
-      term.loadAddon(new WebglAddon());
-    } catch {
-      console.log('WebGL not available, using canvas renderer');
-    }
+        // Try WebGL renderer for performance (falls back to canvas)
+        try {
+            term.loadAddon(new WebglAddon());
+        } catch {
+            console.log('WebGL not available, using canvas renderer');
+        }
 
-    fitAddon.fit();
-    xtermRef.current = term;
-    fitRef.current = fitAddon;
+        fitAddon.fit();
+        xtermRef.current = term;
+        fitRef.current = fitAddon;
 
-    // -----------------------------------------
-    // 2. Open WebSocket to the server
-    // -----------------------------------------
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${window.location.host}?token=${encodeURIComponent(token)}`;
+        // -----------------------------------------
+        // 2. Open WebSocket to the server
+        // -----------------------------------------
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl = `${protocol}://${window.location.host}?token=${encodeURIComponent(token)}`;
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-    ws.onopen = () => {
-      onConnected();
-      term.focus();
+        ws.onopen = () => {
+            onConnected();
+            term.focus();
 
-      // Send initial terminal size so the PTY matches
-      const dims = fitAddon.proposeDimensions();
-      if (dims) {
-        ws.send(JSON.stringify({
-          type: 'resize',
-          cols: dims.cols,
-          rows: dims.rows,
-        }));
-      }
-    };
+            // Send initial terminal size so the PTY matches
+            const dims = fitAddon.proposeDimensions();
+            if (dims) {
+                ws.send(
+                    JSON.stringify({
+                        type: 'resize',
+                        cols: dims.cols,
+                        rows: dims.rows,
+                    }),
+                );
+            }
+        };
 
-    // Server → browser: PTY output (ANSI escape sequences)
-    // xterm.js interprets these and renders the Claude Code TUI
-    ws.onmessage = (event) => {
-      term.write(event.data);
-    };
+        // Server → browser: PTY output (ANSI escape sequences)
+        // xterm.js interprets these and renders the Claude Code TUI
+        ws.onmessage = (event) => {
+            term.write(event.data);
+        };
 
-    ws.onerror = () => {
-      onError('WebSocket connection failed');
-    };
+        ws.onerror = () => {
+            onError('WebSocket connection failed');
+        };
 
-    ws.onclose = () => {
-      term.write('\r\n\x1b[33m[Connection closed]\x1b[0m\r\n');
-    };
+        ws.onclose = () => {
+            term.write('\r\n\x1b[33m[Connection closed]\x1b[0m\r\n');
+        };
 
-    // -----------------------------------------
-    // 3. Browser → server: keystrokes
-    // -----------------------------------------
-    // Every key you press gets sent as raw terminal data.
-    // Claude Code receives it exactly as physical keyboard input.
-    term.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
-    });
+        // -----------------------------------------
+        // 3. Browser → server: keystrokes
+        // -----------------------------------------
+        // Every key you press gets sent as raw terminal data.
+        // Claude Code receives it exactly as physical keyboard input.
+        term.onData((data: string) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(data);
+            }
+        });
 
-    // -----------------------------------------
-    // 4. Handle terminal resize
-    // -----------------------------------------
-    // When the browser window resizes, we need to:
-    //   a) Resize xterm.js to fill the container
-    //   b) Tell the server to resize the PTY
-    //   c) Claude Code redraws its TUI to fit
-    const handleResize = () => {
-      fitAddon.fit();
-      const dims = fitAddon.proposeDimensions();
-      if (dims && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'resize',
-          cols: dims.cols,
-          rows: dims.rows,
-        }));
-      }
-    };
+        // -----------------------------------------
+        // 4. Handle terminal resize
+        // -----------------------------------------
+        // When the browser window resizes, we need to:
+        //   a) Resize xterm.js to fill the container
+        //   b) Tell the server to resize the PTY
+        //   c) Claude Code redraws its TUI to fit
+        const handleResize = () => {
+            fitAddon.fit();
+            const dims = fitAddon.proposeDimensions();
+            if (dims && ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                    JSON.stringify({
+                        type: 'resize',
+                        cols: dims.cols,
+                        rows: dims.rows,
+                    }),
+                );
+            }
+        };
 
-    window.addEventListener('resize', handleResize);
+        window.addEventListener('resize', handleResize);
 
-    // Also handle orientation changes on mobile
-    window.addEventListener('orientationchange', () => {
-      setTimeout(handleResize, 200);
-    });
+        // Also handle orientation changes on mobile
+        window.addEventListener('orientationchange', () => {
+            setTimeout(handleResize, 200);
+        });
 
-    // -----------------------------------------
-    // 5. Cleanup
-    // -----------------------------------------
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      ws.close();
-      term.dispose();
-    };
-  }, [token]);
+        // -----------------------------------------
+        // 5. Cleanup
+        // -----------------------------------------
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            ws.close();
+            term.dispose();
+        };
+    }, [token]);
 
-  return <div ref={termRef} className="terminal-viewport" />;
+    return <div ref={termRef} className="terminal-viewport" />;
 };
 
 export default Terminal;
@@ -640,156 +639,158 @@ export default Terminal;
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
 
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-  background: #0d1117;
-  color: #e6edf3;
-  font-family: 'JetBrains Mono', monospace;
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 /* ----- Login Screen ----- */
 
 .login-container {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
 .login-card {
-  width: 100%;
-  max-width: 360px;
+    width: 100%;
+    max-width: 360px;
 }
 
 .login-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 
 .login-icon {
-  color: #58a6ff;
-  font-size: 24px;
+    color: #58a6ff;
+    font-size: 24px;
 }
 
 .login-header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #e6edf3;
+    font-size: 20px;
+    font-weight: 600;
+    color: #e6edf3;
 }
 
 .login-subtitle {
-  font-size: 13px;
-  color: #8b949e;
-  margin-bottom: 24px;
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 24px;
 }
 
 .token-input {
-  width: 100%;
-  padding: 10px 12px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  color: #e6edf3;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  outline: none;
-  margin-bottom: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 8px;
 }
 
 .token-input:focus {
-  border-color: #58a6ff;
+    border-color: #58a6ff;
 }
 
 .error-text {
-  color: #ff7b72;
-  font-size: 12px;
-  margin-bottom: 8px;
+    color: #ff7b72;
+    font-size: 12px;
+    margin-bottom: 8px;
 }
 
 .connect-btn {
-  width: 100%;
-  padding: 10px;
-  background: #238636;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 8px;
+    width: 100%;
+    padding: 10px;
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
 }
 
 .connect-btn:hover {
-  background: #2ea043;
+    background: #2ea043;
 }
 
 /* ----- Terminal View ----- */
 
 .terminal-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #161b22;
-  border-bottom: 1px solid #30363d;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    flex-shrink: 0;
 }
 
 .terminal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #8b949e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #8b949e;
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3fb950;
-  display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3fb950;
+    display: inline-block;
 }
 
 .disconnect-btn {
-  background: none;
-  border: none;
-  color: #8b949e;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 2px 6px;
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
 }
 
 .disconnect-btn:hover {
-  color: #ff7b72;
+    color: #ff7b72;
 }
 
 .terminal-viewport {
-  flex: 1;
-  padding: 4px;
-  overflow: hidden;
+    flex: 1;
+    padding: 4px;
+    overflow: hidden;
 }
 
 /* Ensure xterm fills its container */
 .terminal-viewport .xterm {
-  height: 100%;
+    height: 100%;
 }
 ```
 
@@ -798,15 +799,15 @@ html, body, #root {
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Claude Terminal</title>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <title>Claude Terminal</title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
 </html>
 ```
 
@@ -900,10 +901,13 @@ Then update `server.ts` to use HTTPS:
 import { readFileSync } from 'fs';
 import { createServer } from 'https';
 
-const server = createServer({
-  cert: readFileSync('/path/to/mac-mini.tailnet-name.ts.net.crt'),
-  key: readFileSync('/path/to/mac-mini.tailnet-name.ts.net.key'),
-}, app);
+const server = createServer(
+    {
+        cert: readFileSync('/path/to/mac-mini.tailnet-name.ts.net.crt'),
+        key: readFileSync('/path/to/mac-mini.tailnet-name.ts.net.key'),
+    },
+    app,
+);
 ```
 
 ---
@@ -1021,21 +1025,21 @@ Add a toolbar above the terminal with buttons for common keys:
 
 ```tsx
 const specialKeys = [
-  { label: 'ESC', seq: '\x1b' },
-  { label: 'TAB', seq: '\t' },
-  { label: 'Ctrl+C', seq: '\x03' },
-  { label: 'Ctrl+D', seq: '\x04' },
-  { label: '↑', seq: '\x1b[A' },
-  { label: '↓', seq: '\x1b[B' },
+    { label: 'ESC', seq: '\x1b' },
+    { label: 'TAB', seq: '\t' },
+    { label: 'Ctrl+C', seq: '\x03' },
+    { label: 'Ctrl+D', seq: '\x04' },
+    { label: '↑', seq: '\x1b[A' },
+    { label: '↓', seq: '\x1b[B' },
 ];
 
 <div className="key-bar">
-  {specialKeys.map(k => (
-    <button key={k.label} onClick={() => wsRef.current?.send(k.seq)}>
-      {k.label}
-    </button>
-  ))}
-</div>
+    {specialKeys.map((k) => (
+        <button key={k.label} onClick={() => wsRef.current?.send(k.seq)}>
+            {k.label}
+        </button>
+    ))}
+</div>;
 ```
 
 ---

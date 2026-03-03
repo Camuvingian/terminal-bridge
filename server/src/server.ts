@@ -1,183 +1,168 @@
 import express from 'express';
-import { createServer } from 'http';
+import { createServer, type IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import * as pty from 'node-pty';
+import type { Duplex } from 'stream';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import cors from 'cors';
-import { ClientCmd, ServerCmd } from '../../shared/protocol.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = parseInt(process.env.PORT || '3001');
-const AUTH_TOKEN = process.env.TERMINAL_BRIDGE_AUTH_TOKEN || 'change-me-immediately';
+import { ServerCmd } from '../../shared/protocol.js';
+import { TerminalConnectionHandler, authenticateTerminalConnection } from './terminal-handler.js';
+import { AiConnectionHandler, authenticateAiConnection } from './ai-handler.js';
+import { ProviderRegistry } from './providers/provider-registry.js';
+import { ClaudeProvider } from './providers/claude-provider.js';
 
-// Resolve client dist — process.cwd() is always the server/ directory
-// whether running via `npm run dev` (tsx) or `npm start` (node dist/...)
-const CLIENT_DIST = path.resolve(process.cwd(), '..', 'client', 'dist');
+/**
+ * Central application server.
+ *
+ * Composes Express (HTTP), two WebSocket servers (terminal + AI), and
+ * the provider registry.  Each concern lives in its own class/module
+ * so the server file is a thin composition root (DIP).
+ *
+ * Uses `noServer` mode for both WebSocket servers so a single `upgrade`
+ * handler can route by pathname — avoids the 400 handshake conflict that
+ * occurs when two WSS instances share the same HTTP server.
+ */
+class TerminalBridgeServer {
+    private readonly app = express();
+    private readonly httpServer = createServer(this.app);
+    private readonly terminalWss = new WebSocketServer({ noServer: true });
+    private readonly aiWss = new WebSocketServer({ noServer: true });
+    private readonly registry = new ProviderRegistry();
 
-const app = express();
-app.use(cors());
+    private readonly port: number;
+    private readonly authToken: string;
+    private readonly clientDist: string;
+    private readonly clientAiDist: string;
 
-// Serve the built React frontend
-app.use(express.static(CLIENT_DIST));
+    constructor() {
+        this.port = parseInt(process.env.PORT || '3001');
+        this.authToken = process.env.TERMINAL_BRIDGE_AUTH_TOKEN || 'change-me-immediately';
 
-// Health check
-app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+        // Resolve client dist directories relative to the server/ working dir
+        this.clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
+        this.clientAiDist = path.resolve(process.cwd(), '..', 'client-ai', 'dist');
 
-// SPA fallback — serve index.html for any non-API, non-WS route
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(CLIENT_DIST, 'index.html'));
-});
-
-const server = createServer(app);
-
-// WebSocket server on /ws path
-const wss = new WebSocketServer({ server, path: '/ws' });
-
-wss.on('connection', (ws: WebSocket, req) => {
-    // --- AUTH ---
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
-
-    if (token !== AUTH_TOKEN) {
-        const msg = buildServerMessage(ServerCmd.ALERT, 'Authentication failed.');
-        ws.send(msg);
-        ws.close();
-        return;
+        this.registerProviders();
+        this.configureMiddleware();
+        this.configureRoutes();
+        this.configureUpgrade();
+        this.configureWebSockets();
     }
 
-    console.log('[+] Client connected, waiting for initial resize...');
+    // ── Bootstrap ───────────────────────────────────────────────────
 
-    // Defer PTY spawn until the client sends its actual dimensions.
-    // This prevents tmux from rendering at 80x24 then immediately resizing,
-    // which causes garbled output on reattach.
-    let shell: pty.IPty | null = null;
-    let paused = false;
-    let outputBuffer: Buffer[] = [];
+    private registerProviders(): void {
+        this.registry.register(new ClaudeProvider());
+    }
 
-    function spawnPty(cols: number, rows: number) {
-        try {
-            shell = pty.spawn('/usr/local/bin/tmux', ['new-session', '-A', '-s', 'claude-web'], {
-                name: 'xterm-256color',
-                cols,
-                rows,
-                cwd: process.env.HOME || '/Users/Camus',
-                env: {
-                    ...process.env,
-                    TERM: 'xterm-256color',
-                    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
-                    PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-                } as Record<string, string>,
-            });
-            console.log(`[+] PTY spawned (${cols}x${rows}), pid: ${shell.pid}`);
-        } catch (err) {
-            console.error('[!] Failed to spawn PTY:', err);
-            const msg = buildServerMessage(ServerCmd.ALERT, 'Failed to spawn terminal session.');
-            ws.send(msg);
-            ws.close();
-            return;
-        }
+    private configureMiddleware(): void {
+        this.app.use(cors());
+    }
 
-        // --- BRIDGE: PTY output → Client ---
-        shell.onData((data: string) => {
-            if (ws.readyState !== WebSocket.OPEN) {
-                return;
-            }
+    private configureRoutes(): void {
+        // Serve the AI client under /ai
+        this.app.use('/ai', express.static(this.clientAiDist));
 
-            if (paused) {
-                outputBuffer.push(Buffer.from(data, 'binary'));
-                return;
-            }
+        // Serve the terminal client at root
+        this.app.use(express.static(this.clientDist));
 
-            const payload = Buffer.from(data, 'binary');
-            const msg = Buffer.alloc(1 + payload.length);
-            msg[0] = ServerCmd.OUTPUT;
-            payload.copy(msg, 1);
-            ws.send(msg);
+        // ── REST API ────────────────────────────────────────────────
+
+        this.app.get('/api/health', (_req, res) => {
+            res.json({ status: 'ok', timestamp: new Date().toISOString() });
         });
 
-        // --- Cleanup if PTY exits ---
-        shell.onExit(({ exitCode }) => {
-            console.log(`[!] PTY exited with code ${exitCode}`);
-            ws.close();
+        this.app.get('/api/ai/providers', (_req, res) => {
+            res.json(this.registry.listProviders());
+        });
+
+        // SPA fallback for /ai/* (must come before the root catch-all)
+        this.app.get('/ai/*', (_req, res) => {
+            res.sendFile(path.join(this.clientAiDist, 'index.html'));
+        });
+
+        // SPA fallback for root terminal client
+        this.app.get('*', (_req, res) => {
+            res.sendFile(path.join(this.clientDist, 'index.html'));
         });
     }
 
-    // --- BRIDGE: Client → PTY ---
-    ws.on('message', (raw: Buffer) => {
-        const buf = Buffer.from(raw);
-        if (buf.length === 0) {
-            return;
-        }
+    /**
+     * Single upgrade handler that routes by pathname.
+     *
+     * This avoids the 400-handshake bug that occurs when two
+     * `WebSocketServer({ server })` instances both attach their own
+     * upgrade listeners to the same HTTP server.
+     */
+    private configureUpgrade(): void {
+        this.httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+            const pathname = new URL(req.url || '', `http://${req.headers.host}`).pathname;
 
-        const cmd = buf[0];
-        const payload = buf.slice(1);
+            if (pathname === '/ws') {
+                this.terminalWss.handleUpgrade(req, socket, head, (ws) => {
+                    this.terminalWss.emit('connection', ws, req);
+                });
+            } else if (pathname === '/ws-ai') {
+                this.aiWss.handleUpgrade(req, socket, head, (ws) => {
+                    this.aiWss.emit('connection', ws, req);
+                });
+            } else {
+                socket.destroy();
+            }
+        });
+    }
 
-        switch (cmd) {
-            case ClientCmd.RESIZE:
-                try {
-                    const { cols, rows } = JSON.parse(payload.toString('utf-8'));
-                    if (typeof cols === 'number' && typeof rows === 'number') {
-                        if (!shell) {
-                            // First resize — spawn PTY at the correct size
-                            spawnPty(cols, rows);
-                        } else {
-                            shell.resize(cols, rows);
-                        }
-                    }
-                } catch {
-                    // Invalid resize payload — ignore
-                }
-                break;
+    private configureWebSockets(): void {
+        // Terminal WebSocket — binary frames
+        this.terminalWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+            if (!authenticateTerminalConnection(req.url || '', req.headers.host || '', this.authToken)) {
+                const payload = Buffer.from('Authentication failed.', 'utf-8');
+                const msg = Buffer.alloc(1 + payload.length);
+                msg[0] = ServerCmd.ALERT;
+                payload.copy(msg, 1);
+                ws.send(msg);
+                ws.close();
+                return;
+            }
 
-            case ClientCmd.INPUT:
-                if (shell) {
-                    shell.write(payload.toString('binary'));
-                }
-                break;
+            console.log('[+] Terminal client connected, waiting for initial resize...');
+            new TerminalConnectionHandler(ws);
+        });
 
-            case ClientCmd.PAUSE:
-                paused = true;
-                break;
+        // AI WebSocket — JSON text frames
+        this.aiWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+            if (!authenticateAiConnection(req.url || '', req.headers.host || '', this.authToken)) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Authentication failed.' }));
+                ws.close();
+                return;
+            }
 
-            case ClientCmd.RESUME:
-                paused = false;
-                for (const chunk of outputBuffer) {
-                    const msg = Buffer.alloc(1 + chunk.length);
-                    msg[0] = ServerCmd.OUTPUT;
-                    chunk.copy(msg, 1);
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(msg);
-                    }
-                }
-                outputBuffer = [];
-                break;
+            console.log('[+] AI client connected');
+            new AiConnectionHandler(ws, this.registry);
+        });
+    }
 
-            default:
-                console.warn(`[!] Unknown client command: 0x${cmd.toString(16)}`);
-        }
-    });
+    // ── Public ──────────────────────────────────────────────────────
 
-    // --- Cleanup on disconnect ---
-    ws.on('close', () => {
-        console.log('[-] Client disconnected');
-        // Don't kill the PTY — tmux keeps the session alive.
-    });
-});
+    start(): void {
+        this.httpServer.listen(this.port, '0.0.0.0', () => {
+            console.log(`Terminal Bridge running on http://0.0.0.0:${this.port}`);
+            console.log(`  Terminal WS:  ws://0.0.0.0:${this.port}/ws`);
+            console.log(`  AI WS:        ws://0.0.0.0:${this.port}/ws-ai`);
+            console.log(`  AI Client:    http://0.0.0.0:${this.port}/ai`);
+            console.log(`  Auth token:   ${this.authToken.slice(0, 4)}...`);
+        });
+    }
 
-// Helper to build a server → client binary message
-function buildServerMessage(cmd: number, text: string): Buffer {
-    const payload = Buffer.from(text, 'utf-8');
-    const msg = Buffer.alloc(1 + payload.length);
-    msg[0] = cmd;
-    payload.copy(msg, 1);
-    return msg;
+    async shutdown(): Promise<void> {
+        await this.registry.disposeAll();
+        this.terminalWss.close();
+        this.aiWss.close();
+        this.httpServer.close();
+    }
 }
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Terminal Bridge running on http://0.0.0.0:${PORT}`);
-    console.log(`WebSocket endpoint: ws://0.0.0.0:${PORT}/ws`);
-    console.log(`Auth token: ${AUTH_TOKEN.slice(0, 4)}...`);
-});
+// ── Entry point ─────────────────────────────────────────────────────
+
+const server = new TerminalBridgeServer();
+server.start();

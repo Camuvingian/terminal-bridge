@@ -55,6 +55,7 @@ The Node.js server on the Mac Mini serves **everything** — both the React fron
 ```
 
 **Connection sequence:**
+
 1. You open `https://terminal-bridge.tailnet:3001` on your phone/laptop
 2. Tailscale routes the request through its encrypted mesh to your Mac Mini
 3. Express serves the React app (static HTML/JS/CSS from `client/dist/`)
@@ -109,20 +110,20 @@ Borrowed from ttyd's proven design. All WebSocket messages use **binary frames**
 
 **Client → Server:**
 
-| Byte | Command   | Payload                                    |
-|------|-----------|--------------------------------------------|
-| `0`  | INPUT     | Raw terminal input bytes (keystrokes)      |
-| `1`  | RESIZE    | JSON: `{"cols": N, "rows": N}`             |
-| `2`  | PAUSE     | (none) — flow control: stop sending output |
-| `3`  | RESUME    | (none) — flow control: resume output       |
+| Byte | Command | Payload                                    |
+| ---- | ------- | ------------------------------------------ |
+| `0`  | INPUT   | Raw terminal input bytes (keystrokes)      |
+| `1`  | RESIZE  | JSON: `{"cols": N, "rows": N}`             |
+| `2`  | PAUSE   | (none) — flow control: stop sending output |
+| `3`  | RESUME  | (none) — flow control: resume output       |
 
 **Server → Client:**
 
-| Byte | Command   | Payload                                    |
-|------|-----------|--------------------------------------------|
-| `0`  | OUTPUT    | Raw terminal output (ANSI escape sequences)|
-| `1`  | TITLE     | String: window/session title               |
-| `2`  | ALERT     | String: server-side notification           |
+| Byte | Command | Payload                                     |
+| ---- | ------- | ------------------------------------------- |
+| `0`  | OUTPUT  | Raw terminal output (ANSI escape sequences) |
+| `1`  | TITLE   | String: window/session title                |
+| `2`  | ALERT   | String: server-side notification            |
 
 This is cleaner, faster, and extensible. Adding new message types later (e.g., file transfer, session list) just means reserving a new byte.
 
@@ -189,6 +190,7 @@ terminal-bridge/
 ```
 
 **Notes:**
+
 - Monorepo with separate `server/` and `client/` packages. Shared ESLint + Prettier config at the root.
 - `shared/protocol.ts` defines the binary command bytes and is imported by both client and server — single source of truth for the protocol.
 
@@ -202,46 +204,41 @@ Taken directly from the jewel-thief-safehouse project to ensure consistency:
 
 ```json
 {
-  "semi": true,
-  "singleQuote": true,
-  "trailingComma": "all",
-  "printWidth": 140,
-  "tabWidth": 4,
-  "bracketSpacing": true,
-  "arrowParens": "always"
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 140,
+    "tabWidth": 4,
+    "bracketSpacing": true,
+    "arrowParens": "always"
 }
 ```
 
 ### `eslint.config.js`
 
 ```javascript
-import js from "@eslint/js";
-import globals from "globals";
-import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
-import tseslint from "typescript-eslint";
-import { defineConfig, globalIgnores } from "eslint/config";
+import js from '@eslint/js';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import tseslint from 'typescript-eslint';
+import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
-  globalIgnores(["dist", "server/dist", "client/dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      js.configs.recommended,
-      tseslint.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
-    languageOptions: {
-      ecmaVersion: 2020,
-      globals: { ...globals.browser, ...globals.node },
+    globalIgnores(['dist', 'server/dist', 'client/dist']),
+    {
+        files: ['**/*.{ts,tsx}'],
+        extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
+        languageOptions: {
+            ecmaVersion: 2020,
+            globals: { ...globals.browser, ...globals.node },
+        },
+        rules: {
+            curly: ['error', 'all'],
+            'brace-style': ['error', '1tbs', { allowSingleLine: false }],
+            'nonblock-statement-body-position': ['error', 'below'],
+        },
     },
-    rules: {
-      curly: ["error", "all"],
-      "brace-style": ["error", "1tbs", { allowSingleLine: false }],
-      "nonblock-statement-body-position": ["error", "below"],
-    },
-  },
 ]);
 ```
 
@@ -249,10 +246,10 @@ export default defineConfig([
 
 ```json
 {
-  "scripts": {
-    "format": "prettier --write . && eslint . --fix",
-    "lint": "eslint ."
-  }
+    "scripts": {
+        "format": "prettier --write . && eslint . --fix",
+        "lint": "eslint ."
+    }
 }
 ```
 
@@ -272,54 +269,54 @@ export default defineConfig([
 ### Phase 2 — Server Implementation
 
 1. Write `server/src/server.ts`:
-   - Express app serving static files from `client/dist`
-   - Health check endpoint at `/api/health`
-   - SPA fallback route
-   - WebSocket server on `/ws` path with token authentication
-   - PTY spawn (tmux wrapping Claude Code) with `node-pty`
-   - **Binary protocol**: read first byte of each incoming frame to dispatch:
-     - `0x00` INPUT → write payload to PTY
-     - `0x01` RESIZE → parse JSON payload, call `shell.resize()`
-     - `0x02` PAUSE → pause PTY output buffering
-     - `0x03` RESUME → resume PTY output
-   - PTY output → prepend `0x00` byte → send as binary WebSocket frame
-   - Cleanup on disconnect (don't kill tmux — session persists)
-   - Cleanup on PTY exit (close WebSocket)
+    - Express app serving static files from `client/dist`
+    - Health check endpoint at `/api/health`
+    - SPA fallback route
+    - WebSocket server on `/ws` path with token authentication
+    - PTY spawn (tmux wrapping Claude Code) with `node-pty`
+    - **Binary protocol**: read first byte of each incoming frame to dispatch:
+        - `0x00` INPUT → write payload to PTY
+        - `0x01` RESIZE → parse JSON payload, call `shell.resize()`
+        - `0x02` PAUSE → pause PTY output buffering
+        - `0x03` RESUME → resume PTY output
+    - PTY output → prepend `0x00` byte → send as binary WebSocket frame
+    - Cleanup on disconnect (don't kill tmux — session persists)
+    - Cleanup on PTY exit (close WebSocket)
 2. Configure via environment variables:
-   - `TERMINAL_BRIDGE_AUTH_TOKEN` — shared secret for WebSocket auth
-   - `PORT` — default `3001`
-   - `ANTHROPIC_API_KEY` — passed through to PTY environment
+    - `TERMINAL_BRIDGE_AUTH_TOKEN` — shared secret for WebSocket auth
+    - `PORT` — default `3001`
+    - `ANTHROPIC_API_KEY` — passed through to PTY environment
 
 ### Phase 3 — Client Implementation
 
 1. Write `client/src/main.tsx` — React entry point
 2. Write `client/src/styles.css` — dark terminal theme (GitHub Dark inspired)
 3. Write `client/src/App.tsx`:
-   - Connection state machine: `disconnected` → `connecting` → `connected` → `reconnecting` → `error`
-   - Login screen with token input
-   - Terminal view with header (status dot, title, disconnect button)
+    - Connection state machine: `disconnected` → `connecting` → `connected` → `reconnecting` → `error`
+    - Login screen with token input
+    - Terminal view with header (status dot, title, disconnect button)
 4. Write `client/src/Terminal.tsx`:
-   - Create xterm.js instance with theme configuration
-   - Load addons: FitAddon, WebLinksAddon, WebglAddon (with canvas fallback)
-   - Open WebSocket to `wss://terminal-bridge.tailnet:3001/ws?token=<token>`
-   - **Binary protocol**: all sends/receives use the shared protocol constants
-   - Bridge: incoming `0x00` frame → `term.write(payload)` (server output to screen)
-   - Bridge: `term.onData` → `[0x00, ...bytes]` sent as binary frame (keystrokes to server)
-   - Resize handler: `fitAddon.fit()` → `[0x01, ...JSON]` sent as binary frame
-   - **Auto-reconnect**: on `ws.onclose`:
-     - Show "Reconnecting..." overlay on terminal (not a page change)
-     - Exponential backoff: 1s → 2s → 4s → 8s → max 30s
-     - On reconnect, re-send auth token + terminal dimensions
-     - tmux reattaches automatically — user resumes where they left off
-     - Overlay disappears on successful reconnect
-   - Cleanup on unmount
+    - Create xterm.js instance with theme configuration
+    - Load addons: FitAddon, WebLinksAddon, WebglAddon (with canvas fallback)
+    - Open WebSocket to `wss://terminal-bridge.tailnet:3001/ws?token=<token>`
+    - **Binary protocol**: all sends/receives use the shared protocol constants
+    - Bridge: incoming `0x00` frame → `term.write(payload)` (server output to screen)
+    - Bridge: `term.onData` → `[0x00, ...bytes]` sent as binary frame (keystrokes to server)
+    - Resize handler: `fitAddon.fit()` → `[0x01, ...JSON]` sent as binary frame
+    - **Auto-reconnect**: on `ws.onclose`:
+        - Show "Reconnecting..." overlay on terminal (not a page change)
+        - Exponential backoff: 1s → 2s → 4s → 8s → max 30s
+        - On reconnect, re-send auth token + terminal dimensions
+        - tmux reattaches automatically — user resumes where they left off
+        - Overlay disappears on successful reconnect
+    - Cleanup on unmount
 
 ### Phase 4 — Mobile Enhancements
 
 1. Write `client/src/KeyBar.tsx` — on-screen special key toolbar:
-   - ESC, TAB, Ctrl+C, Ctrl+D, Arrow keys (↑↓←→)
-   - Each button sends the appropriate escape sequence via the binary protocol
-   - Positioned above the terminal, below the header
+    - ESC, TAB, Ctrl+C, Ctrl+D, Arrow keys (↑↓←→)
+    - Each button sends the appropriate escape sequence via the binary protocol
+    - Positioned above the terminal, below the header
 2. Viewport meta tag: `user-scalable=no` to prevent zoom interference
 3. Orientation change listener with delayed resize
 
@@ -334,12 +331,12 @@ export default defineConfig([
 ### Phase 6 — Deployment Configuration
 
 1. Document Tailscale setup:
-   - Install Tailscale on Mac Mini
-   - Set machine name to `terminal-bridge` → accessible at `https://terminal-bridge.tailnet:3001`
-   - Install Tailscale on phone/laptop, same tailnet
+    - Install Tailscale on Mac Mini
+    - Set machine name to `terminal-bridge` → accessible at `https://terminal-bridge.tailnet:3001`
+    - Install Tailscale on phone/laptop, same tailnet
 2. Document HTTPS with Tailscale cert provisioning:
-   - `tailscale cert terminal-bridge.tailnet.ts.net`
-   - Server reads cert/key files for HTTPS
+    - `tailscale cert terminal-bridge.tailnet.ts.net`
+    - Server reads cert/key files for HTTPS
 3. Create macOS LaunchAgent plist for persistent service (auto-start, auto-restart)
 4. Document environment variable setup (`ANTHROPIC_API_KEY`, `TERMINAL_BRIDGE_AUTH_TOKEN`)
 
@@ -422,16 +419,16 @@ Additional benefits:
 
 ## 10. Decisions Made
 
-| Decision | Choice | Reasoning |
-|----------|--------|-----------|
-| React version | 19 | Matches jewel-thief-safehouse, latest stable |
-| Styling | Plain CSS | Minimal UI (login + fullscreen terminal), no framework needed |
-| WebSocket protocol | Binary with command prefix | Cleaner than JSON.parse fallback, extensible, proven by ttyd |
-| Auto-reconnect | Yes, with exponential backoff | Critical for mobile — phone locks, Wi-Fi switches |
-| Mobile key bar | Included in v1 | Small effort, big impact on phone usability |
-| Port | 3001 (configurable via env) | Standard for this kind of service |
-| Tailscale hostname | `terminal-bridge` → `https://terminal-bridge.tailnet:3001` | User-specified |
-| Client hosting | Self-served by the Node.js server | No cloud needed, one process does everything |
+| Decision           | Choice                                                     | Reasoning                                                     |
+| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| React version      | 19                                                         | Matches jewel-thief-safehouse, latest stable                  |
+| Styling            | Plain CSS                                                  | Minimal UI (login + fullscreen terminal), no framework needed |
+| WebSocket protocol | Binary with command prefix                                 | Cleaner than JSON.parse fallback, extensible, proven by ttyd  |
+| Auto-reconnect     | Yes, with exponential backoff                              | Critical for mobile — phone locks, Wi-Fi switches             |
+| Mobile key bar     | Included in v1                                             | Small effort, big impact on phone usability                   |
+| Port               | 3001 (configurable via env)                                | Standard for this kind of service                             |
+| Tailscale hostname | `terminal-bridge` → `https://terminal-bridge.tailnet:3001` | User-specified                                                |
+| Client hosting     | Self-served by the Node.js server                          | No cloud needed, one process does everything                  |
 
 ## 11. Remaining Open Decisions
 
@@ -451,12 +448,12 @@ Additional benefits:
 
 These are deliberately excluded from v1 to keep things simple and shippable. All are viable v2+ additions:
 
-- **User management / multi-user auth** — This is a single-user tool for your personal Mac Mini. Token auth is sufficient. *Later: JWT + bcrypt like claudecodeui if you want multi-user.*
-- **Database** — No state to persist. tmux handles session persistence. *Later: SQLite for session history, user prefs.*
-- **File explorer / code editor** — v1 is purely terminal. *Later: file tree + CodeMirror like claudecodeui.*
-- **Git UI** — Use git from within the terminal. *Later: status/diff/commit UI panel.*
-- **Tool approval UI** — Claude Code's permission prompts work fine in the terminal. *Later: structured dialog like claudecodeui.*
-- **Multi-provider support** — v1 is Claude Code focused. *Later: Codex, Gemini CLI via the same PTY bridge.*
+- **User management / multi-user auth** — This is a single-user tool for your personal Mac Mini. Token auth is sufficient. _Later: JWT + bcrypt like claudecodeui if you want multi-user._
+- **Database** — No state to persist. tmux handles session persistence. _Later: SQLite for session history, user prefs._
+- **File explorer / code editor** — v1 is purely terminal. _Later: file tree + CodeMirror like claudecodeui._
+- **Git UI** — Use git from within the terminal. _Later: status/diff/commit UI panel._
+- **Tool approval UI** — Claude Code's permission prompts work fine in the terminal. _Later: structured dialog like claudecodeui._
+- **Multi-provider support** — v1 is Claude Code focused. _Later: Codex, Gemini CLI via the same PTY bridge._
 - **Docker** — Running natively on macOS for direct PTY access and Claude Code performance.
 - **CI/CD** — Manual deploy via git pull + rebuild. Can be added later.
 - **Testing** — Small surface area. Manual testing against a real Claude Code session is more valuable than unit tests for v1.
