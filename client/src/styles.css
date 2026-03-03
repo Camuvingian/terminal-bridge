@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ----- Login Screen ----- */
+
+.login-container {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 360px;
+}
+
+.login-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.login-icon {
+    color: #58a6ff;
+    font-size: 24px;
+}
+
+.login-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #e6edf3;
+}
+
+.login-subtitle {
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 24px;
+}
+
+.token-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 8px;
+}
+
+.token-input:focus {
+    border-color: #58a6ff;
+}
+
+.error-text {
+    color: #ff7b72;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.connect-btn {
+    width: 100%;
+    padding: 10px;
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.connect-btn:hover {
+    background: #2ea043;
+}
+
+/* ----- Terminal View ----- */
+
+.terminal-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    flex-shrink: 0;
+}
+
+.terminal-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #8b949e;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.connected {
+    background: #3fb950;
+}
+
+.status-dot.reconnecting {
+    background: #d29922;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
+}
+
+.disconnect-btn {
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.disconnect-btn:hover {
+    color: #ff7b72;
+}
+
+.terminal-viewport {
+    flex: 1;
+    padding: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Ensure xterm fills its container */
+.terminal-viewport .xterm {
+    height: 100%;
+}
+
+/* Reconnect overlay */
+.reconnect-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13, 17, 23, 0.85);
+    z-index: 10;
+}
+
+.reconnect-text {
+    color: #d29922;
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ----- Mobile Key Bar ----- */
+
+.key-bar {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    flex-shrink: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.key-bar button {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.key-bar button:active {
+    background: #30363d;
+}
