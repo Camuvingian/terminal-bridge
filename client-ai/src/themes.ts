@@ -24,6 +24,7 @@ export const themes: Record<string, Theme> = {
             '--success': '#3fb950',
             '--error': '#ff7b72',
             '--warning': '#d29922',
+            '--contrast': '#3fb950',
         },
     },
     'neon-heist': {
@@ -44,6 +45,7 @@ export const themes: Record<string, Theme> = {
             '--success': '#00ff9c',
             '--error': '#ff6b8a',
             '--warning': '#ffb347',
+            '--contrast': '#00c8ff',
         },
     },
     'neon-ice': {
@@ -64,6 +66,7 @@ export const themes: Record<string, Theme> = {
             '--success': '#00e5a0',
             '--error': '#ff6b8a',
             '--warning': '#ffb347',
+            '--contrast': '#ff6b8a',
         },
     },
     vanilla: {
@@ -84,6 +87,7 @@ export const themes: Record<string, Theme> = {
             '--success': 'hsl(140 55% 35%)',
             '--error': 'hsl(0 65% 48%)',
             '--warning': 'hsl(35 80% 45%)',
+            '--contrast': 'hsl(15 80% 55%)',
         },
     },
 };

@@ -19,6 +19,7 @@
     --success: #3fb950;
     --error: #ff7b72;
     --warning: #d29922;
+    --contrast: #3fb950;
 }
 
 * {
@@ -64,7 +65,22 @@ body,
 }
 
 .login-icon {
-    font-size: 24px;
+    width: 28px;
+    height: 20px;
+    color: var(--contrast);
+    animation: invader-pulse 3s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes invader-pulse {
+    0%, 100% {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
 }
 
 .login-header h1 {
@@ -72,10 +88,10 @@ body,
     font-weight: 600;
 }
 
-/* Login header shimmer — sweeps accent highlight every 5s */
+/* Login title shimmer — wide glisten sweeps across text every 7s */
 
 @keyframes login-glisten {
-    0%, 80% {
+    0%, 70% {
         background-position: -200% center;
     }
     100% {
@@ -83,21 +99,21 @@ body,
     }
 }
 
-.login-shimmer .login-icon,
 .login-shimmer h1 {
     background: linear-gradient(
         90deg,
         var(--fg) 0%,
-        var(--fg) 35%,
-        var(--accent) 50%,
-        var(--fg) 65%,
+        var(--fg) 20%,
+        var(--accent) 40%,
+        var(--accent) 60%,
+        var(--fg) 80%,
         var(--fg) 100%
     );
     background-size: 200% auto;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: login-glisten 5s ease-in-out infinite;
+    animation: login-glisten 7s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 .login-subtitle {
