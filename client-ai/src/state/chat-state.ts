@@ -128,7 +128,8 @@ export type ChatAction =
     | { type: 'SERVER_MESSAGE'; msg: AiServerMessage }
     | { type: 'TOGGLE_SETTINGS' }
     | { type: 'SET_THEME'; theme: string }
-    | { type: 'DISMISS_SESSION_EXPIRED' };
+    | { type: 'DISMISS_SESSION_EXPIRED' }
+    | { type: 'NEW_CHAT' };
 
 // ── Reducer ─────────────────────────────────────────────────────────
 
@@ -161,6 +162,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
         case 'DISMISS_SESSION_EXPIRED':
             return { ...state, sessionExpired: false };
+
+        case 'NEW_CHAT':
+            clearSessionId();
+            clearChatMessages();
+            return {
+                ...state,
+                messages: [],
+                sessionId: null,
+                streamingMessageId: null,
+                queryStatus: 'idle',
+                pendingPermission: null,
+                sessionExpired: false,
+            };
 
         default:
             return state;

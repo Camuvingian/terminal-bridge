@@ -96,6 +96,10 @@ const AiChatLayout: React.FC<AiChatLayoutProps> = ({ token, connectionState, onC
         [socket],
     );
 
+    const handleNewChat = useCallback(() => {
+        dispatch({ type: 'NEW_CHAT' });
+    }, []);
+
     const handleToggleSettings = useCallback(() => {
         dispatch({ type: 'TOGGLE_SETTINGS' });
     }, []);
@@ -121,6 +125,17 @@ const AiChatLayout: React.FC<AiChatLayoutProps> = ({ token, connectionState, onC
                             </div>
                             <div className="chat-header-right">
                                 <StatusBar connectionState={connectionState} queryStatus={state.queryStatus} />
+                                <button
+                                    className="new-chat-btn"
+                                    onClick={handleNewChat}
+                                    disabled={state.queryStatus === 'querying'}
+                                    title="New Chat"
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 20h9" />
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                    </svg>
+                                </button>
                                 <button className="disconnect-btn" onClick={onDisconnect} title="Disconnect">
                                     &#10005;
                                 </button>

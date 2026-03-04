@@ -1,21 +1,32 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 interface SessionExpiredBannerProps {
     onDismiss: () => void;
 }
 
-const AUTO_DISMISS_MS = 8_000;
+const VISIBLE_MS = 3_000;
+const POP_DURATION_MS = 400;
 
 const SessionExpiredBanner: React.FC<SessionExpiredBannerProps> = ({ onDismiss }) => {
+    const [popping, setPopping] = useState(false);
+
     useEffect(() => {
-        const timer = setTimeout(onDismiss, AUTO_DISMISS_MS);
-        return () => clearTimeout(timer);
+        const popTimer = setTimeout(() => setPopping(true), VISIBLE_MS);
+        const dismissTimer = setTimeout(onDismiss, VISIBLE_MS + POP_DURATION_MS);
+        return () => {
+            clearTimeout(popTimer);
+            clearTimeout(dismissTimer);
+        };
     }, [onDismiss]);
 
+    const handleClick = () => {
+        setPopping(true);
+        setTimeout(onDismiss, POP_DURATION_MS);
+    };
+
     return (
-        <div className="session-expired-banner" onClick={onDismiss} role="alert">
-            <span className="session-expired-icon">&#9888;</span>
-            <span>Session timed out — your conversation history has been preserved</span>
+        <div className={`session-expired-bubble ${popping ? 'popping' : ''}`} onClick={handleClick} role="alert">
+            <span>Session expired — history preserved</span>
         </div>
     );
 };
