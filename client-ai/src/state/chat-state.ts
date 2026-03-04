@@ -292,12 +292,19 @@ function handleSessionSnapshot(state: ChatState, snap: SessionSnapshotMessage): 
         timestamp: Date.now(),
     };
 
-    // Replace existing streaming message or append
+    // Replace existing streaming message or append — but skip if the
+    // last message already matches (avoids duplicates on reconnect).
     let messages: ChatMessage[];
     if (state.streamingMessageId) {
         messages = state.messages.map((m) => (m.id === state.streamingMessageId ? restoredMsg : m));
     } else {
-        messages = [...state.messages, restoredMsg];
+        const last = state.messages[state.messages.length - 1];
+        const alreadyHas = last?.role === 'assistant' && last.text === snap.assistantText && snap.queryStatus === 'idle';
+        if (alreadyHas) {
+            messages = state.messages;
+        } else {
+            messages = [...state.messages, restoredMsg];
+        }
     }
 
     const isFinished = snap.queryStatus === 'idle';
