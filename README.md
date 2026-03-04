@@ -2,12 +2,82 @@
 
 Bridge the gap between your browser and your machine's command line. Access a full terminal session and an AI chat interface from anywhere over the web.
 
-Terminal Bridge runs on a Mac Mini (or any macOS/Linux host) and exposes two browser-based clients through a single server:
+Terminal Bridge runs on any macOS or Linux host and exposes two browser-based clients through a single server:
 
 - **Terminal Client** — A full xterm.js terminal connected to a persistent tmux session
 - **AI Chat Client** — A ChatGPT-style interface powered by the Claude Agent SDK with tool use, streaming, and themes
 
 Both clients authenticate via a shared token and reconnect automatically on connection loss.
+
+---
+
+## Quick Start
+
+### 1. Prerequisites
+
+- **Node.js 22+** and npm
+- **macOS or Linux** with tmux (`brew install tmux` on macOS)
+- An **Anthropic API key** ([console.anthropic.com](https://console.anthropic.com))
+- **Tailscale** for remote access ([tailscale.com](https://tailscale.com)) — see [Remote Access via Tailscale](#remote-access-via-tailscale) below
+
+### 2. Install
+
+```bash
+npm install -g terminal-bridge
+```
+
+### 3. Configure
+
+Add to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export TERMINAL_BRIDGE_AUTH_TOKEN="pick-a-strong-secret"
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Reload your shell (`source ~/.zshrc`) or open a new terminal.
+
+### 4. Set up Tailscale (recommended)
+
+Install [Tailscale](https://tailscale.com) on the host and on every device you want to connect from (phone, laptop, etc.). Sign in with the same account on each device. Terminal Bridge auto-detects your Tailscale IP at startup.
+
+### 5. Run
+
+```bash
+terminal-bridge
+```
+
+The CLI prints local and remote connection URLs:
+
+```
+  ╔══════════════════════════════════════╗
+  ║         Terminal Bridge              ║
+  ╚══════════════════════════════════════╝
+
+  Tailscale IP detected: 100.x.x.x
+
+  Remote URLs (Tailscale):
+    Terminal:  http://100.x.x.x:3001/
+    AI Chat:   http://100.x.x.x:3001/ai
+
+  Local URLs:
+    Terminal:  http://localhost:3001/
+    AI Chat:   http://localhost:3001/ai
+```
+
+Use a custom port with `PORT=3002 terminal-bridge`.
+
+---
+
+## Remote Access via Tailscale
+
+[Tailscale](https://tailscale.com) is a zero-config mesh VPN that creates a private network between your devices. No port forwarding, no dynamic DNS, no firewall rules. It's the recommended way to access Terminal Bridge from outside your LAN.
+
+1. Install Tailscale on the host running Terminal Bridge and on your phone/laptop
+2. Sign in on both devices with the same account
+3. Start Terminal Bridge — it auto-detects your Tailscale IP and prints remote URLs
+
+Any VPN or tunneling solution (WireGuard, ZeroTier, Cloudflare Tunnel) will also work. Tailscale is recommended because it's simple, free for personal use, and requires no infrastructure.
 
 ---
 
@@ -61,12 +131,12 @@ Slide-over panel from the left, triggered by the gear icon in the header. Contai
 
 Four built-in themes, all using CSS custom properties. Theme persists across sessions via localStorage.
 
-| Theme | Preview |
-|-------|---------|
-| **Dark** (default) — Deep charcoal with purple accents | ![Dark](docs/screenshots/theme-dark.png) |
-| **Neon Heist** — Deep purple with magenta/neon green | ![Neon Heist](docs/screenshots/theme-neon-heist.png) |
-| **Neon Ice** — Deep navy with electric blue | ![Neon Ice](docs/screenshots/theme-neon-ice.png) |
-| **Vanilla** — Light cream with navy accents | ![Vanilla](docs/screenshots/theme-vanilla.png) |
+| Theme                                                  | Preview                                              |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| **Dark** (default) — Deep charcoal with purple accents | ![Dark](docs/screenshots/theme-dark.png)             |
+| **Neon Heist** — Deep purple with magenta/neon green   | ![Neon Heist](docs/screenshots/theme-neon-heist.png) |
+| **Neon Ice** — Deep navy with electric blue            | ![Neon Ice](docs/screenshots/theme-neon-ice.png)     |
+| **Vanilla** — Light cream with navy accents            | ![Vanilla](docs/screenshots/theme-vanilla.png)       |
 
 ---
 
@@ -115,54 +185,7 @@ No changes to the handler, protocol, or client are needed.
 
 ---
 
-## Quick Start
-
-### Prerequisites
-
-- **Node.js** 22+ and npm
-- **macOS** with tmux (`brew install tmux`)
-- **Anthropic API key** (`ANTHROPIC_API_KEY` env var)
-
-### Install from npm
-
-```bash
-npm install -g terminal-bridge
-```
-
-Set your environment variables (add to `~/.zshrc` or `~/.bashrc`):
-
-```bash
-export TERMINAL_BRIDGE_AUTH_TOKEN="your-secret-token"
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Start the server:
-
-```bash
-terminal-bridge
-```
-
-The CLI auto-detects your Tailscale IP (if available) and prints connection URLs:
-
-```
-  ╔══════════════════════════════════════╗
-  ║         Terminal Bridge               ║
-  ╚══════════════════════════════════════╝
-
-  Tailscale IP detected: 100.x.x.x
-
-  Remote URLs (Tailscale):
-    Terminal:  http://100.x.x.x:3001/
-    AI Chat:   http://100.x.x.x:3001/ai
-
-  Local URLs:
-    Terminal:  http://localhost:3001/
-    AI Chat:   http://localhost:3001/ai
-```
-
-Use a custom port with `PORT=3002 terminal-bridge`.
-
-### Install from source
+## Install from Source
 
 ```bash
 git clone <repo-url> terminal-bridge
@@ -260,12 +283,13 @@ See `shared/ai-protocol.ts` for full type definitions.
 
 ## Deployment
 
-Terminal Bridge is designed to run on a home server (Mac Mini) accessed via Tailscale or similar VPN:
+Terminal Bridge is designed to run on a persistent host (home server, cloud VM, always-on desktop) that you access remotely:
 
 1. Set `TERMINAL_BRIDGE_AUTH_TOKEN` to a strong secret
-2. Build all packages: `npm run build`
-3. Start the server: `npm start` (or use a process manager like pm2)
-4. Access via `http://<tailscale-ip>:3001/` (terminal) or `/ai` (chat)
+2. Install [Tailscale](https://tailscale.com) on the host and your remote devices
+3. Build all packages: `npm run build`
+4. Start the server: `npm start` (or use a process manager like pm2)
+5. Access via `http://<tailscale-ip>:3001/` (terminal) or `/ai` (chat)
 
 ---
 

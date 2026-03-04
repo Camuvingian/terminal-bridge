@@ -2,7 +2,7 @@
 
 ## What is this project?
 
-Terminal Bridge is a monorepo that exposes a Mac Mini's terminal and AI chat over the web. It has two browser clients — a full xterm.js terminal and a ChatGPT-style AI chat UI — both served by a single Express + WebSocket server.
+Terminal Bridge is a monorepo that exposes a host machine's terminal and AI chat over the web. It has two browser clients — a full xterm.js terminal and a ChatGPT-style AI chat UI — both served by a single Express + WebSocket server.
 
 ## Repository Structure
 

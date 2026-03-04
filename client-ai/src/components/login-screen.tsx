@@ -19,7 +19,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ error, onConnect }) => {
                     <span className="login-icon">&#9672;</span>
                     <h1>Terminal Bridge AI</h1>
                 </div>
-                <p className="login-subtitle">Chat with AI agents on your Mac Mini</p>
+                <p className="login-subtitle">Chat with AI agents over the web</p>
                 <input
                     type="password"
                     className="token-input"

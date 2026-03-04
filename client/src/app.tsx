@@ -43,7 +43,7 @@ const App: React.FC = () => {
                         <span className="login-icon">▸</span>
                         <h1>Terminal Bridge</h1>
                     </div>
-                    <p className="login-subtitle">Web proxy into Claude Code on your Mac Mini</p>
+                    <p className="login-subtitle">Web terminal for remote access</p>
                     <input
                         type="password"
                         className="token-input"
@@ -74,7 +74,7 @@ const App: React.FC = () => {
             <div className="terminal-header">
                 <span className="terminal-title">
                     <span className={`status-dot ${isReconnecting ? 'reconnecting' : 'connected'}`} />
-                    Terminal Bridge {isReconnecting ? '— Reconnecting...' : '— Mac Mini'}
+                    Terminal Bridge {isReconnecting ? '— Reconnecting...' : '— Connected'}
                 </span>
                 <button className="disconnect-btn" onClick={handleDisconnect}>
                     ✕
