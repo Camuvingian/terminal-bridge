@@ -176,6 +176,23 @@ const Terminal: React.FC<TerminalProps> = ({ token, onConnected, onError, onDisc
 
         connect();
 
+        // ── Visibility-based instant reconnect ─────────────────────
+        function onVisibilityChange() {
+            if (document.visibilityState !== 'visible' || !mountedRef.current || intentionalClose.current) {
+                return;
+            }
+            const ws = wsRef.current;
+            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                if (reconnectTimer.current) {
+                    clearTimeout(reconnectTimer.current);
+                    reconnectTimer.current = null;
+                }
+                reconnectDelay.current = 1000;
+                connect();
+            }
+        }
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
         // 3. Browser → server: keystrokes
         const dataDisposable = term.onData((data: string) => {
             const ws = wsRef.current;
@@ -203,6 +220,7 @@ const Terminal: React.FC<TerminalProps> = ({ token, onConnected, onError, onDisc
         return () => {
             mountedRef.current = false;
             intentionalClose.current = true;
+            document.removeEventListener('visibilitychange', onVisibilityChange);
             window.removeEventListener('resize', handleResize);
             if (reconnectTimer.current) {
                 clearTimeout(reconnectTimer.current);

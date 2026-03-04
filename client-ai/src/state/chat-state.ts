@@ -8,6 +8,58 @@ import type {
     SessionSnapshotMessage,
 } from '@shared/ai-protocol';
 
+// ── Persistence Helpers ──────────────────────────────────────────────
+
+const SESSION_ID_KEY = 'terminal-bridge-session-id';
+const CHAT_MESSAGES_KEY = 'terminal-bridge-chat-messages';
+const MAX_PERSISTED_MESSAGES = 50;
+
+export function saveSessionId(sessionId: string): void {
+    try {
+        sessionStorage.setItem(SESSION_ID_KEY, sessionId);
+    } catch { /* quota exceeded — ignore */ }
+}
+
+export function loadSessionId(): string | null {
+    try {
+        return sessionStorage.getItem(SESSION_ID_KEY);
+    } catch {
+        return null;
+    }
+}
+
+export function clearSessionId(): void {
+    try {
+        sessionStorage.removeItem(SESSION_ID_KEY);
+    } catch { /* ignore */ }
+}
+
+export function saveChatMessages(messages: ChatMessage[]): void {
+    try {
+        const trimmed = messages.slice(-MAX_PERSISTED_MESSAGES);
+        localStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(trimmed));
+    } catch { /* quota exceeded — ignore */ }
+}
+
+export function loadChatMessages(): ChatMessage[] {
+    try {
+        const raw = localStorage.getItem(CHAT_MESSAGES_KEY);
+        if (!raw) {
+            return [];
+        }
+        const parsed = JSON.parse(raw) as ChatMessage[];
+        return Array.isArray(parsed) ? parsed.slice(-MAX_PERSISTED_MESSAGES) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function clearChatMessages(): void {
+    try {
+        localStorage.removeItem(CHAT_MESSAGES_KEY);
+    } catch { /* ignore */ }
+}
+
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface ToolUseEntry {
@@ -51,11 +103,12 @@ export interface ChatState {
     settingsOpen: boolean;
     theme: string;
     lastPromptTokens: number;
+    sessionExpired: boolean;
 }
 
 export const initialChatState: ChatState = {
-    messages: [],
-    sessionId: null,
+    messages: loadChatMessages(),
+    sessionId: loadSessionId(),
     models: [],
     activeModel: '',
     permissionMode: 'default',
@@ -65,6 +118,7 @@ export const initialChatState: ChatState = {
     settingsOpen: false,
     theme: 'dark',
     lastPromptTokens: 0,
+    sessionExpired: false,
 };
 
 // ── Actions ─────────────────────────────────────────────────────────
@@ -73,7 +127,8 @@ export type ChatAction =
     | { type: 'ADD_USER_MESSAGE'; prompt: string }
     | { type: 'SERVER_MESSAGE'; msg: AiServerMessage }
     | { type: 'TOGGLE_SETTINGS' }
-    | { type: 'SET_THEME'; theme: string };
+    | { type: 'SET_THEME'; theme: string }
+    | { type: 'DISMISS_SESSION_EXPIRED' };
 
 // ── Reducer ─────────────────────────────────────────────────────────
 
@@ -104,6 +159,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         case 'SET_THEME':
             return { ...state, theme: action.theme };
 
+        case 'DISMISS_SESSION_EXPIRED':
+            return { ...state, sessionExpired: false };
+
         default:
             return state;
     }
@@ -112,6 +170,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 function handleServerMessage(state: ChatState, msg: AiServerMessage): ChatState {
     switch (msg.type) {
         case 'init':
+            saveSessionId(msg.sessionId);
             return {
                 ...state,
                 sessionId: msg.sessionId,
@@ -178,7 +237,18 @@ function handleServerMessage(state: ChatState, msg: AiServerMessage): ChatState 
             return { ...state, models: msg.models, activeModel: msg.activeModel };
 
         case 'session-snapshot':
+            saveSessionId(msg.sessionId);
             return handleSessionSnapshot(state, msg);
+
+        case 'session-expired':
+            clearSessionId();
+            return {
+                ...state,
+                sessionExpired: true,
+                sessionId: null,
+                streamingMessageId: null,
+                queryStatus: 'idle',
+            };
 
         default:
             return state;

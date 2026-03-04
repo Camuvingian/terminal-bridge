@@ -191,6 +191,11 @@ export interface ThinkingDeltaMessage {
     text: string;
 }
 
+export interface SessionExpiredMessage {
+    type: 'session-expired';
+    sessionId: string;
+}
+
 export type AiServerMessage =
     | InitMessage
     | TextDeltaMessage
@@ -204,4 +209,5 @@ export type AiServerMessage =
     | ErrorMessage
     | ModelListMessage
     | StatusMessage
-    | SessionSnapshotMessage;
+    | SessionSnapshotMessage
+    | SessionExpiredMessage;

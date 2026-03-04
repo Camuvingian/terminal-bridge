@@ -1,6 +1,6 @@
 import { useReducer, useCallback, useEffect } from 'react';
 import type { ConnectionState } from '../app';
-import { ChatContext, chatReducer, initialChatState } from '../state/chat-state';
+import { ChatContext, chatReducer, initialChatState, saveChatMessages } from '../state/chat-state';
 import { useAiSocket } from '../hooks/use-ai-socket';
 import { useWakeLock } from '../hooks/use-wake-lock';
 import { useBackgroundNotifications } from '../hooks/use-background-notifications';
@@ -12,6 +12,7 @@ import StatusBar from './status-bar';
 import ModelSelector from './model-selector';
 import PermissionDialog from './permission-dialog';
 import SettingsPanel from './settings-panel';
+import SessionExpiredBanner from './session-expired-banner';
 
 interface AiChatLayoutProps {
     token: string;
@@ -60,6 +61,15 @@ const AiChatLayout: React.FC<AiChatLayoutProps> = ({ token, connectionState, onC
         }
     }, [connectionState, socket]);
 
+    // Persist chat messages to localStorage whenever they change
+    useEffect(() => {
+        saveChatMessages(state.messages);
+    }, [state.messages]);
+
+    const handleDismissExpired = useCallback(() => {
+        dispatch({ type: 'DISMISS_SESSION_EXPIRED' });
+    }, []);
+
     const handleSend = useCallback(
         (prompt: string) => {
             dispatch({ type: 'ADD_USER_MESSAGE', prompt });
@@ -99,19 +109,25 @@ const AiChatLayout: React.FC<AiChatLayoutProps> = ({ token, connectionState, onC
             <div className="ai-layout">
                 <div className="main-panel">
                     <div className="chat-header">
-                        <div className="chat-header-left">
-                            <button className="settings-btn" onClick={handleToggleSettings} title="Settings">
-                                &#9881;
-                            </button>
-                            <ModelSelector models={state.models} activeModel={state.activeModel} onModelChange={handleModelChange} />
-                        </div>
-                        <div className="chat-header-right">
-                            <StatusBar connectionState={connectionState} queryStatus={state.queryStatus} />
-                            <button className="disconnect-btn" onClick={onDisconnect} title="Disconnect">
-                                &#10005;
-                            </button>
+                        <div className="chat-header-inner">
+                            <div className="chat-header-left">
+                                <button className="settings-btn" onClick={handleToggleSettings} title="Settings">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="3" />
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                    </svg>
+                                </button>
+                                <ModelSelector models={state.models} activeModel={state.activeModel} onModelChange={handleModelChange} />
+                            </div>
+                            <div className="chat-header-right">
+                                <StatusBar connectionState={connectionState} queryStatus={state.queryStatus} />
+                                <button className="disconnect-btn" onClick={onDisconnect} title="Disconnect">
+                                    &#10005;
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    {state.sessionExpired && <SessionExpiredBanner onDismiss={handleDismissExpired} />}
                     <ChatArea messages={state.messages} isQuerying={state.queryStatus === 'querying'} />
                     <InputBar
                         onSend={handleSend}

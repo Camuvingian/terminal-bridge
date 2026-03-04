@@ -101,7 +101,7 @@ export class AiConnectionHandler {
     private handleReconnect(sessionId: string): void {
         const existing = this.getSession(sessionId);
         if (!existing) {
-            this.send({ type: 'error', message: 'Session not found.', code: 'NO_SESSION' });
+            this.send({ type: 'session-expired', sessionId });
             return;
         }
 

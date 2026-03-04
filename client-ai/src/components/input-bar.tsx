@@ -11,12 +11,17 @@ const InputBar: React.FC<InputBarProps> = ({ onSend, onInterrupt, isQuerying, di
     const [text, setText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Auto-grow textarea
+    // Auto-grow textarea, show scrollbar only when at max height
     useEffect(() => {
         const el = textareaRef.current;
         if (el) {
             el.style.height = 'auto';
-            el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+            el.style.overflowY = 'hidden';
+            const clamped = Math.min(el.scrollHeight, 200);
+            el.style.height = clamped + 'px';
+            if (el.scrollHeight > 200) {
+                el.style.overflowY = 'auto';
+            }
         }
     }, [text]);
 

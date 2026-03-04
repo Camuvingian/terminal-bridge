@@ -14,7 +14,7 @@ export type SessionSink = (msg: AiServerMessage) => void;
 /** Called by the server when a session's cleanup timer fires. */
 export type SessionCleanup = (sessionId: string) => void;
 
-const CLEANUP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const CLEANUP_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 
 /**
  * Owns the lifecycle of a single AI query.

@@ -123,10 +123,48 @@ No changes to the handler, protocol, or client are needed.
 - **macOS** with tmux (`brew install tmux`)
 - **Anthropic API key** (`ANTHROPIC_API_KEY` env var)
 
-### Setup
+### Install from npm
 
 ```bash
-# Clone the repo
+npm install -g terminal-bridge
+```
+
+Set your environment variables (add to `~/.zshrc` or `~/.bashrc`):
+
+```bash
+export TERMINAL_BRIDGE_AUTH_TOKEN="your-secret-token"
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Start the server:
+
+```bash
+terminal-bridge
+```
+
+The CLI auto-detects your Tailscale IP (if available) and prints connection URLs:
+
+```
+  ╔══════════════════════════════════════╗
+  ║         Terminal Bridge               ║
+  ╚══════════════════════════════════════╝
+
+  Tailscale IP detected: 100.x.x.x
+
+  Remote URLs (Tailscale):
+    Terminal:  http://100.x.x.x:3001/
+    AI Chat:   http://100.x.x.x:3001/ai
+
+  Local URLs:
+    Terminal:  http://localhost:3001/
+    AI Chat:   http://localhost:3001/ai
+```
+
+Use a custom port with `PORT=3002 terminal-bridge`.
+
+### Install from source
+
+```bash
 git clone <repo-url> terminal-bridge
 cd terminal-bridge
 
@@ -135,12 +173,6 @@ npm install
 cd client && npm install && cd ..
 cd client-ai && npm install && cd ..
 cd server && npm install && cd ..
-
-# Set your auth token
-export TERMINAL_BRIDGE_AUTH_TOKEN="your-secret-token"
-
-# Set your Anthropic API key
-export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Create client-ai .env for auto-connect (optional)
 echo "TERMINAL_BRIDGE_AUTH_TOKEN=your-secret-token" > client-ai/.env

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import LoginScreen from './components/login-screen';
 import AiChatLayout from './components/ai-chat-layout';
 import { applyTheme, getSavedTheme } from './themes';
+import { clearSessionId, clearChatMessages } from './state/chat-state';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -36,6 +37,8 @@ const App: React.FC = () => {
     }, []);
 
     const handleDisconnect = useCallback(() => {
+        clearSessionId();
+        clearChatMessages();
         setState('disconnected');
         setToken('');
     }, []);
