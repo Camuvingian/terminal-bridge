@@ -12,16 +12,12 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import os from 'os';
 
-// ── Resolve package root ────────────────────────────────────────────
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
 // Tell the server where to find client dist dirs
 process.env.TERMINAL_BRIDGE_ROOT = ROOT;
-
-// ── Tailscale IP detection ──────────────────────────────────────────
 
 function getTailscaleIp() {
     // Try `tailscale ip -4` first (most reliable)
@@ -50,14 +46,12 @@ function getTailscaleIp() {
     return null;
 }
 
-// ── Banner ──────────────────────────────────────────────────────────
-
 const port = process.env.PORT || '3001';
 const tailscaleIp = getTailscaleIp();
 
 console.log('');
 console.log('  ╔══════════════════════════════════════╗');
-console.log('  ║         Terminal Bridge               ║');
+console.log('  ║         Terminal Bridge              ║');
 console.log('  ╚══════════════════════════════════════╝');
 console.log('');
 
@@ -74,8 +68,6 @@ console.log('  Local URLs:');
 console.log(`    Terminal:  http://localhost:${port}/`);
 console.log(`    AI Chat:   http://localhost:${port}/ai`);
 console.log('');
-
-// ── Preflight checks ────────────────────────────────────────────────
 
 if (!process.env.TERMINAL_BRIDGE_AUTH_TOKEN || process.env.TERMINAL_BRIDGE_AUTH_TOKEN === 'change-me-immediately') {
     console.warn('  ⚠  TERMINAL_BRIDGE_AUTH_TOKEN is not set or using the default.');
@@ -98,8 +90,6 @@ try {
     console.warn('     Install with: brew install tmux');
     console.warn('');
 }
-
-// ── Start server ────────────────────────────────────────────────────
 
 const serverEntry = path.join(ROOT, 'server', 'dist', 'server', 'src', 'server.js');
 
