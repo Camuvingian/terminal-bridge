@@ -39,6 +39,7 @@
         "dev:client": "cd client && npm run dev",
         "dev:client-ai": "cd client-ai && npm run dev",
         "start": "node bin/terminal-bridge.mjs",
+        "postinstall": "node -e \"const fs=require('fs'),p=require('path'),d=p.join(__dirname,'node_modules','node-pty','prebuilds');if(fs.existsSync(d)){for(const s of fs.readdirSync(d)){const h=p.join(d,s,'spawn-helper');if(fs.existsSync(h))fs.chmodSync(h,0o755)}}\"",
         "prepublishOnly": "npm run build"
     },
     "dependencies": {
