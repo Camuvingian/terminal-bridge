@@ -22,7 +22,7 @@ process.env.TERMINAL_BRIDGE_ROOT = ROOT;
 function getTailscaleIp() {
     // Try `tailscale ip -4` first (most reliable)
     try {
-        const ip = execSync('tailscale ip -4', { timeout: 3000, encoding: 'utf-8' }).trim();
+        const ip = execSync('tailscale ip -4', { timeout: 3000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
         if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
             return ip;
         }
@@ -62,6 +62,15 @@ if (tailscaleIp) {
     console.log(`    Terminal:  http://${tailscaleIp}:${port}/`);
     console.log(`    AI Chat:   http://${tailscaleIp}:${port}/ai`);
     console.log('');
+} else {
+    console.warn('  ⚠  Tailscale not detected. Remote access will not work.');
+    console.warn('');
+    console.warn('     Install Tailscale for remote access from your other devices:');
+    console.warn('       macOS:  brew install --cask tailscale');
+    console.warn('       Linux:  https://tailscale.com/download/linux');
+    console.warn('');
+    console.warn('     After installing, run `tailscale up` and restart Terminal Bridge.');
+    console.warn('');
 }
 
 console.log('  Local URLs:');

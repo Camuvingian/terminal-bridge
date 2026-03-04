@@ -18,15 +18,28 @@ Both clients authenticate via a shared token and reconnect automatically on conn
 - **Node.js 22+** and npm
 - **macOS or Linux** with tmux (`brew install tmux` on macOS)
 - An **Anthropic API key** ([console.anthropic.com](https://console.anthropic.com))
-- **Tailscale** for remote access ([tailscale.com](https://tailscale.com)) — see [Remote Access via Tailscale](#remote-access-via-tailscale) below
+- **Tailscale** for remote access ([tailscale.com/download](https://tailscale.com/download))
 
-### 2. Install
+### 2. Install Tailscale
+
+Install Tailscale on the host machine and on every device you want to connect from (phone, laptop, iPad):
+
+```bash
+# macOS
+brew install --cask tailscale
+
+# Linux — see https://tailscale.com/download/linux
+```
+
+Open Tailscale, sign in, and run `tailscale up`. Then install Tailscale on your remote devices and sign in with the same account.
+
+### 3. Install Terminal Bridge
 
 ```bash
 npm install -g terminal-bridge
 ```
 
-### 3. Configure
+### 4. Configure
 
 Add to your `~/.zshrc` or `~/.bashrc`:
 
@@ -36,10 +49,6 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 Reload your shell (`source ~/.zshrc`) or open a new terminal.
-
-### 4. Set up Tailscale (recommended)
-
-Install [Tailscale](https://tailscale.com) on the host and on every device you want to connect from (phone, laptop, etc.). Sign in with the same account on each device. Terminal Bridge auto-detects your Tailscale IP at startup.
 
 ### 5. Run
 
