@@ -1,6 +1,9 @@
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import type { ChatMessage } from '../state/chat-state';
 import ThinkingBlock from './thinking-block';
 import ToolUseBlock from './tool-use-block';
@@ -25,7 +28,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ message, isLatest }
 
                 {message.text && (
                     <div className="assistant-text">
-                        <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                        <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeHighlight, rehypeKatex]}>
                             {message.text}
                         </Markdown>
                     </div>

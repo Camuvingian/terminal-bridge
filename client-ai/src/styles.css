@@ -1254,4 +1254,18 @@ body,
         padding: 10px 14px;
         font-size: 14px;
     }
+
+    .disconnect-btn {
+        font-size: 22px;
+        padding: 8px 12px;
+    }
+
+    .new-chat-btn {
+        padding: 8px;
+    }
+
+    .new-chat-btn svg {
+        width: 22px;
+        height: 22px;
+    }
 }
