@@ -67,7 +67,10 @@ body,
 .login-icon {
     width: 28px;
     height: 20px;
-    color: var(--contrast);
+    color: var(--accent);
+    filter:
+        drop-shadow(0 0 1px var(--contrast))
+        drop-shadow(0 0 4px var(--contrast));
     animation: invader-pulse 3s ease-in-out infinite;
     flex-shrink: 0;
 }
