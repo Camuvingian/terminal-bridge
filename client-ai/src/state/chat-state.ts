@@ -116,7 +116,7 @@ export const initialChatState: ChatState = {
     pendingPermission: null,
     streamingMessageId: null,
     settingsOpen: false,
-    theme: 'dark',
+    theme: 'neon-ice',
     lastPromptTokens: 0,
     sessionExpired: false,
 };

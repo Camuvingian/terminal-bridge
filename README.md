@@ -110,6 +110,7 @@ Both clients authenticate with a shared token. Set `TERMINAL_BRIDGE_AUTH_TOKEN` 
 
 - Stream responses from Claude with real-time text, thinking, and tool use
 - Full markdown rendering — tables, code blocks, headings, lists, blockquotes, links
+- LaTeX math rendering (KaTeX) — inline `$...$` and display `$$...$$`
 - Syntax highlighting in code blocks (highlight.js, github-dark theme)
 - Model switching at runtime (Opus 4.6, Sonnet 4.6, Haiku 4.5)
 - Tool use blocks with expandable input/output and duration
@@ -149,9 +150,9 @@ Four built-in themes, all using CSS custom properties. Theme persists across ses
 
 | Theme                                                  | Preview                                              |
 | ------------------------------------------------------ | ---------------------------------------------------- |
-| **Dark** (default) — Deep charcoal with purple accents | ![Dark](docs/screenshots/theme-dark.png)             |
+| **Dark** — Deep charcoal with purple accents           | ![Dark](docs/screenshots/theme-dark.png)             |
 | **Neon Heist** — Deep purple with magenta/neon green   | ![Neon Heist](docs/screenshots/theme-neon-heist.png) |
-| **Neon Ice** — Deep navy with electric blue            | ![Neon Ice](docs/screenshots/theme-neon-ice.png)     |
+| **Neon Ice** (default) — Deep navy with electric blue  | ![Neon Ice](docs/screenshots/theme-neon-ice.png)     |
 | **Vanilla** — Light cream with navy accents            | ![Vanilla](docs/screenshots/theme-vanilla.png)       |
 
 ---

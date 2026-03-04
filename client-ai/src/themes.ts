@@ -105,5 +105,5 @@ export function applyTheme(id: string): void {
 }
 
 export function getSavedTheme(): string {
-    return localStorage.getItem(STORAGE_KEY) ?? 'dark';
+    return localStorage.getItem(STORAGE_KEY) ?? 'neon-ice';
 }

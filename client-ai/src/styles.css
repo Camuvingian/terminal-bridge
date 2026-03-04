@@ -4,22 +4,22 @@
 /* ----- CSS Custom Properties (Dark theme defaults) ----- */
 
 :root {
-    --bg: #0d1117;
-    --bg-panel: #161b22;
-    --bg-input: #161b22;
-    --bg-hover: #21262d;
-    --fg: #e6edf3;
-    --fg-muted: #8b949e;
-    --fg-dim: #484f58;
-    --border: #30363d;
-    --border-focus: #bc8cff;
-    --accent: #bc8cff;
-    --accent-hover: #9a6eed;
-    --accent-muted: #8957e5;
-    --success: #3fb950;
-    --error: #ff7b72;
-    --warning: #d29922;
-    --contrast: #3fb950;
+    --bg: #0a1628;
+    --bg-panel: #0f1d32;
+    --bg-input: #0c1829;
+    --bg-hover: #162440;
+    --fg: #d4eaff;
+    --fg-muted: #6fa8d6;
+    --fg-dim: #3b6a96;
+    --border: #1a3555;
+    --border-focus: #00c8ff;
+    --accent: #00c8ff;
+    --accent-hover: #33d4ff;
+    --accent-muted: #0099cc;
+    --success: #00e5a0;
+    --error: #ff6b8a;
+    --warning: #ffb347;
+    --contrast: #ff6b8a;
 }
 
 * {
