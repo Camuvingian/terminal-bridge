@@ -95,7 +95,6 @@ export class TerminalConnectionHandler {
                 env: {
                     ...process.env,
                     TERM: 'xterm-256color',
-                    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
                     PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
                 } as Record<string, string>,
             });

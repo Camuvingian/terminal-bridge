@@ -107,7 +107,7 @@ Hooks sync callback refs inside `useEffect()` (not during render) to avoid stale
 
 - Node.js 22+, npm
 - macOS with tmux installed (`brew install tmux`)
-- `ANTHROPIC_API_KEY` env var set
+- Claude Code installed and authenticated (`npm install -g @anthropic-ai/claude-code`)
 - `TERMINAL_BRIDGE_AUTH_TOKEN` env var set (shared by server + client-ai `.env`)
 
 ### Commands
@@ -137,7 +137,6 @@ npm run lint
 | Variable | Used By | Purpose |
 |----------|---------|---------|
 | `TERMINAL_BRIDGE_AUTH_TOKEN` | Server + client-ai `.env` | WebSocket auth token |
-| `ANTHROPIC_API_KEY` | Server (passed to PTY + SDK) | Claude API key |
 | `PORT` | Server | HTTP port (default 3001) |
 
 ## Code Conventions

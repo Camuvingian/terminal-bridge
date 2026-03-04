@@ -51,7 +51,7 @@ const tailscaleIp = getTailscaleIp();
 
 console.log('');
 console.log('  ╔══════════════════════════════════════╗');
-console.log('  ║         Terminal Bridge              ║');
+console.log('  ║           Terminal Bridge            ║');
 console.log('  ╚══════════════════════════════════════╝');
 console.log('');
 
@@ -82,12 +82,6 @@ if (!process.env.TERMINAL_BRIDGE_AUTH_TOKEN || process.env.TERMINAL_BRIDGE_AUTH_
     console.warn('  ⚠  TERMINAL_BRIDGE_AUTH_TOKEN is not set or using the default.');
     console.warn('     Set it in your shell profile for security:');
     console.warn('     export TERMINAL_BRIDGE_AUTH_TOKEN="your-secret-token"');
-    console.warn('');
-}
-
-if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('  ⚠  ANTHROPIC_API_KEY is not set. AI chat will not work.');
-    console.warn('     export ANTHROPIC_API_KEY="sk-ant-..."');
     console.warn('');
 }
 

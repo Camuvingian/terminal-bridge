@@ -6,7 +6,7 @@ Get Terminal Bridge running in under five minutes.
 
 - **Node.js 22+** and npm
 - **macOS or Linux** with `tmux` installed (`brew install tmux` on macOS)
-- An **Anthropic API key** ([console.anthropic.com](https://console.anthropic.com))
+- **Claude Code** installed and authenticated on the host (`npm install -g @anthropic-ai/claude-code`)
 - **Tailscale** installed on the host and your remote devices ([tailscale.com/download](https://tailscale.com/download))
 
 ## Install Tailscale
@@ -32,7 +32,6 @@ Add to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
 export TERMINAL_BRIDGE_AUTH_TOKEN="pick-a-strong-secret"
-export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 Reload your shell (`source ~/.zshrc`) or open a new terminal.

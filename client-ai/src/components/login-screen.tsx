@@ -15,7 +15,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ error, onConnect }) => {
     return (
         <div className="login-container">
             <div className="login-card">
-                <div className="login-header">
+                <div className="login-header login-shimmer">
                     <span className="login-icon">&#9672;</span>
                     <h1>Terminal Bridge AI</h1>
                 </div>

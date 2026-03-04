@@ -17,7 +17,7 @@ Both clients authenticate via a shared token and reconnect automatically on conn
 
 - **Node.js 22+** and npm
 - **macOS or Linux** with tmux (`brew install tmux` on macOS)
-- An **Anthropic API key** ([console.anthropic.com](https://console.anthropic.com))
+- **Claude Code** installed and authenticated on the host (`npm install -g @anthropic-ai/claude-code`)
 - **Tailscale** for remote access ([tailscale.com/download](https://tailscale.com/download))
 
 ### 2. Install Tailscale
@@ -45,7 +45,6 @@ Add to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
 export TERMINAL_BRIDGE_AUTH_TOKEN="pick-a-strong-secret"
-export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 Reload your shell (`source ~/.zshrc`) or open a new terminal.
@@ -119,6 +118,14 @@ Both clients authenticate with a shared token. Set `TERMINAL_BRIDGE_AUTH_TOKEN` 
 - Interrupt/stop button for in-flight queries
 
 ![AI Chat — Response with markdown table and token summary](docs/screenshots/ai-chat.png)
+
+### Mobile
+
+Both clients are fully responsive and designed for phone use over Tailscale.
+
+| Login | AI Chat | Terminal |
+|-------|---------|----------|
+| ![Mobile Login](docs/screenshots/mobile-login.png) | ![Mobile AI Chat](docs/screenshots/mobile-ai-chat.png) | ![Mobile Terminal](docs/screenshots/mobile-terminal.png) |
 
 ### Animated Thinking Indicator
 
@@ -240,7 +247,6 @@ Vite dev servers proxy WebSocket and API requests to the server on :3001.
 | Variable                     | Required | Default                 | Description                                 |
 | ---------------------------- | -------- | ----------------------- | ------------------------------------------- |
 | `TERMINAL_BRIDGE_AUTH_TOKEN` | Yes      | `change-me-immediately` | Shared auth token for WebSocket connections |
-| `ANTHROPIC_API_KEY`          | Yes      | —                       | Claude API key for AI provider              |
 | `PORT`                       | No       | `3001`                  | Server HTTP port                            |
 
 ---
