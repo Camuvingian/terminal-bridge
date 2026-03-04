@@ -29,7 +29,7 @@ export class ClaudeProvider extends AgentProvider {
     readonly id = 'claude';
     readonly displayName = 'Claude (Agent SDK)';
 
-    private model = 'claude-sonnet-4-6';
+    private model = 'claude-opus-4-6';
     private permissionMode: PermissionModeValue = 'acceptEdits';
     private pendingPermissions = new Map<string, PendingPermission>();
     private permissionCounter = 0;
@@ -62,6 +62,8 @@ export class ClaudeProvider extends AgentProvider {
         const resultContent: AgentContentBlock[] = [];
         let totalInputTokens = 0;
         let totalOutputTokens = 0;
+        let totalCacheReadTokens = 0;
+        let totalCacheWriteTokens = 0;
         let totalCostUsd: number | undefined;
 
         try {
@@ -99,7 +101,7 @@ export class ClaudeProvider extends AgentProvider {
                 // Accumulate token usage from SDK result messages
                 const raw = message as unknown as Record<string, unknown>;
                 if (raw.type === 'result') {
-                    // Try top-level usage (snake_case from Anthropic API)
+                    // Top-level usage (snake_case from Anthropic API)
                     if (raw.usage && typeof raw.usage === 'object') {
                         const usage = raw.usage as Record<string, unknown>;
                         if (typeof usage.input_tokens === 'number') {
@@ -108,15 +110,27 @@ export class ClaudeProvider extends AgentProvider {
                         if (typeof usage.output_tokens === 'number') {
                             totalOutputTokens += usage.output_tokens;
                         }
+                        if (typeof usage.cache_read_input_tokens === 'number') {
+                            totalCacheReadTokens += usage.cache_read_input_tokens;
+                        }
+                        if (typeof usage.cache_creation_input_tokens === 'number') {
+                            totalCacheWriteTokens += usage.cache_creation_input_tokens;
+                        }
                     }
-                    // Also try modelUsage (camelCase per-model breakdown)
-                    if (totalInputTokens === 0 && raw.modelUsage && typeof raw.modelUsage === 'object') {
+                    // Fallback: modelUsage (camelCase per-model breakdown)
+                    if (totalInputTokens === 0 && totalCacheReadTokens === 0 && raw.modelUsage && typeof raw.modelUsage === 'object') {
                         for (const model of Object.values(raw.modelUsage as Record<string, Record<string, unknown>>)) {
                             if (typeof model.inputTokens === 'number') {
                                 totalInputTokens += model.inputTokens;
                             }
                             if (typeof model.outputTokens === 'number') {
                                 totalOutputTokens += model.outputTokens;
+                            }
+                            if (typeof model.cacheReadInputTokens === 'number') {
+                                totalCacheReadTokens += model.cacheReadInputTokens;
+                            }
+                            if (typeof model.cacheCreationInputTokens === 'number') {
+                                totalCacheWriteTokens += model.cacheCreationInputTokens;
                             }
                         }
                     }
@@ -147,8 +161,10 @@ export class ClaudeProvider extends AgentProvider {
             type: 'result',
             content: resultContent,
             usage: {
-                inputTokens: totalInputTokens,
+                inputTokens: totalInputTokens + totalCacheReadTokens + totalCacheWriteTokens,
                 outputTokens: totalOutputTokens,
+                cacheReadTokens: totalCacheReadTokens || undefined,
+                cacheWriteTokens: totalCacheWriteTokens || undefined,
                 costUsd: totalCostUsd,
             },
             durationMs,

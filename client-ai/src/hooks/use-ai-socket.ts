@@ -3,6 +3,7 @@ import type { AiClientMessage, AiServerMessage } from '@shared/ai-protocol';
 
 interface UseAiSocketOptions {
     token: string;
+    sessionId: string | null;
     onMessage: (msg: AiServerMessage) => void;
     onConnected: () => void;
     onReconnecting: () => void;
@@ -21,24 +22,26 @@ export interface AiSocket {
  * Same exponential backoff pattern as the terminal client, but uses
  * JSON text frames instead of binary.
  */
-export function useAiSocket({ token, onMessage, onConnected, onReconnecting, onDisconnect, onError }: UseAiSocketOptions): AiSocket {
+export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconnecting, onDisconnect, onError }: UseAiSocketOptions): AiSocket {
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectDelay = useRef(1000);
     const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
     const intentionalClose = useRef(false);
 
-    // Stable refs for callbacks to avoid reconnect cycles
+    // Stable refs for callbacks and sessionId to avoid reconnect cycles
     const onMessageRef = useRef(onMessage);
     const onConnectedRef = useRef(onConnected);
     const onReconnectingRef = useRef(onReconnecting);
     const onErrorRef = useRef(onError);
+    const sessionIdRef = useRef(sessionId);
 
     useEffect(() => {
         onMessageRef.current = onMessage;
         onConnectedRef.current = onConnected;
         onReconnectingRef.current = onReconnecting;
         onErrorRef.current = onError;
+        sessionIdRef.current = sessionId;
     });
 
     useEffect(() => {
@@ -58,6 +61,12 @@ export function useAiSocket({ token, onMessage, onConnected, onReconnecting, onD
             ws.onopen = () => {
                 reconnectDelay.current = 1000;
                 onConnectedRef.current();
+
+                // If we have an active session, send a reconnect message
+                // so the server replays the snapshot
+                if (sessionIdRef.current) {
+                    ws.send(JSON.stringify({ type: 'reconnect', sessionId: sessionIdRef.current }));
+                }
             };
 
             ws.onmessage = (event: MessageEvent) => {
@@ -101,9 +110,33 @@ export function useAiSocket({ token, onMessage, onConnected, onReconnecting, onD
 
         connect();
 
+        // ── Visibility-based instant reconnect ─────────────────────
+        // When the user returns to the tab (e.g., after mobile minimize),
+        // force an immediate reconnect if the socket is dead, instead of
+        // waiting for the next exponential backoff tick.
+        function onVisibilityChange() {
+            if (document.visibilityState !== 'visible' || !mountedRef.current || intentionalClose.current) {
+                return;
+            }
+
+            const ws = wsRef.current;
+            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                // Cancel any pending backoff timer and reconnect now
+                if (reconnectTimer.current) {
+                    clearTimeout(reconnectTimer.current);
+                    reconnectTimer.current = null;
+                }
+                reconnectDelay.current = 1000; // reset backoff
+                connect();
+            }
+        }
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
         return () => {
             mountedRef.current = false;
             intentionalClose.current = true;
+            document.removeEventListener('visibilitychange', onVisibilityChange);
             if (reconnectTimer.current) {
                 clearTimeout(reconnectTimer.current);
             }

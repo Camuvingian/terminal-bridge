@@ -8,6 +8,7 @@ import cors from 'cors';
 import { ServerCmd } from '../../shared/protocol.js';
 import { TerminalConnectionHandler, authenticateTerminalConnection } from './terminal-handler.js';
 import { AiConnectionHandler, authenticateAiConnection } from './ai-handler.js';
+import { AiSession } from './ai-session.js';
 import { ProviderRegistry } from './providers/provider-registry.js';
 import { ClaudeProvider } from './providers/claude-provider.js';
 
@@ -28,6 +29,7 @@ class TerminalBridgeServer {
     private readonly terminalWss = new WebSocketServer({ noServer: true });
     private readonly aiWss = new WebSocketServer({ noServer: true });
     private readonly registry = new ProviderRegistry();
+    private readonly sessions = new Map<string, AiSession>();
 
     private readonly port: number;
     private readonly authToken: string;
@@ -38,9 +40,12 @@ class TerminalBridgeServer {
         this.port = parseInt(process.env.PORT || '3001');
         this.authToken = process.env.TERMINAL_BRIDGE_AUTH_TOKEN || 'change-me-immediately';
 
-        // Resolve client dist directories relative to the server/ working dir
-        this.clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
-        this.clientAiDist = path.resolve(process.cwd(), '..', 'client-ai', 'dist');
+        // Resolve client dist directories.
+        // TERMINAL_BRIDGE_ROOT is set by the CLI bin entry point (npm/npx usage).
+        // Falls back to cwd-based resolution for `cd server && npm start` dev usage.
+        const root = process.env.TERMINAL_BRIDGE_ROOT || path.resolve(process.cwd(), '..');
+        this.clientDist = path.resolve(root, 'client', 'dist');
+        this.clientAiDist = path.resolve(root, 'client-ai', 'dist');
 
         this.registerProviders();
         this.configureMiddleware();
@@ -138,13 +143,36 @@ class TerminalBridgeServer {
             }
 
             console.log('[+] AI client connected');
-            new AiConnectionHandler(ws, this.registry);
+            new AiConnectionHandler(
+                ws,
+                this.registry,
+                (id) => this.sessions.get(id),
+                () => {
+                    const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                    const session = new AiSession(sessionId, (id) => {
+                        console.log(`[~] Cleaning up expired session ${id}`);
+                        this.sessions.delete(id);
+                    });
+                    this.sessions.set(sessionId, session);
+                    return session;
+                },
+            );
         });
     }
 
     // ── Public ──────────────────────────────────────────────────────
 
     start(): void {
+        this.httpServer.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`\n  Port ${this.port} is already in use.`);
+                console.error(`  Kill the existing process or use a different port:`);
+                console.error(`    PORT=3002 terminal-bridge\n`);
+                process.exit(1);
+            }
+            throw err;
+        });
+
         this.httpServer.listen(this.port, '0.0.0.0', () => {
             console.log(`Terminal Bridge running on http://0.0.0.0:${this.port}`);
             console.log(`  Terminal WS:  ws://0.0.0.0:${this.port}/ws`);

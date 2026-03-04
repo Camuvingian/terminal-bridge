@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { themes, applyTheme } from '../themes';
+import { SHOW_COST_KEY } from './result-summary';
 
 interface SettingsPanelProps {
     currentTheme: string;
@@ -7,23 +8,26 @@ interface SettingsPanelProps {
     onClose: () => void;
 }
 
-const swatchColors: Record<string, string> = {
-    dark: '#bc8cff',
-    'neon-heist': '#d57bff',
-    'neon-ice': '#00c8ff',
-    vanilla: 'hsl(220 60% 30%)',
-};
-
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ currentTheme, onThemeChange, onClose }) => {
     const panelRef = useRef<HTMLDivElement>(null);
+    const [showCost, setShowCost] = useState(() => localStorage.getItem(SHOW_COST_KEY) === 'true');
 
     const handleThemeSelect = useCallback(
-        (id: string) => {
+        (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const id = e.target.value;
             applyTheme(id);
             onThemeChange(id);
         },
         [onThemeChange],
     );
+
+    const handleCostToggle = useCallback(() => {
+        setShowCost((prev) => {
+            const next = !prev;
+            localStorage.setItem(SHOW_COST_KEY, String(next));
+            return next;
+        });
+    }, []);
 
     // Close on Escape
     useEffect(() => {
@@ -48,21 +52,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ currentTheme, onThemeChan
                 </div>
                 <div className="settings-body">
                     <div className="settings-section-label">Theme</div>
-                    <div className="theme-list">
+                    <select className="settings-select" value={currentTheme} onChange={handleThemeSelect}>
                         {Object.entries(themes).map(([id, theme]) => (
-                            <button
-                                key={id}
-                                className={'theme-option' + (id === currentTheme ? ' active' : '')}
-                                onClick={() => handleThemeSelect(id)}
-                            >
-                                <span
-                                    className="theme-swatch"
-                                    style={{ background: swatchColors[id] ?? theme.vars['--accent'] }}
-                                />
+                            <option key={id} value={id}>
                                 {theme.label}
-                            </button>
+                            </option>
                         ))}
-                    </div>
+                    </select>
+
+                    <div className="settings-section-label">Display</div>
+                    <label className="settings-toggle">
+                        <input type="checkbox" checked={showCost} onChange={handleCostToggle} />
+                        Show cost per response
+                    </label>
                 </div>
             </div>
         </>

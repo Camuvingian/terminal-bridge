@@ -1008,45 +1008,43 @@ body,
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
+    margin-top: 16px;
 }
 
-.theme-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.settings-section-label:first-child {
+    margin-top: 0;
 }
 
-.theme-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.settings-select {
     width: 100%;
     padding: 8px 12px;
-    background: none;
-    border: 1px solid transparent;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--fg);
     font-size: 13px;
     font-family: 'Inter', sans-serif;
-    text-align: left;
+    cursor: pointer;
+    appearance: auto;
+}
+
+.settings-select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--fg);
     cursor: pointer;
 }
 
-.theme-option:hover {
-    background: var(--bg-hover);
-}
-
-.theme-option.active {
-    border-color: var(--accent);
-    background: var(--bg-hover);
-}
-
-.theme-swatch {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid var(--border);
-    flex-shrink: 0;
+.settings-toggle input[type='checkbox'] {
+    accent-color: var(--accent);
+    cursor: pointer;
 }
 
 /* ----- Scrollbar ----- */

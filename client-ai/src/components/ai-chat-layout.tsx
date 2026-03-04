@@ -2,6 +2,8 @@ import { useReducer, useCallback, useEffect } from 'react';
 import type { ConnectionState } from '../app';
 import { ChatContext, chatReducer, initialChatState } from '../state/chat-state';
 import { useAiSocket } from '../hooks/use-ai-socket';
+import { useWakeLock } from '../hooks/use-wake-lock';
+import { useBackgroundNotifications } from '../hooks/use-background-notifications';
 import { getSavedTheme } from '../themes';
 import type { AiServerMessage } from '@shared/ai-protocol';
 import ChatArea from './chat-area';
@@ -26,12 +28,24 @@ const AiChatLayout: React.FC<AiChatLayoutProps> = ({ token, connectionState, onC
         theme: getSavedTheme(),
     });
 
+    // Keep screen awake while an AI query is in-flight
+    useWakeLock(state.queryStatus === 'querying');
+
+    // Show browser notification when query completes in background
+    const { notifyIfHidden } = useBackgroundNotifications();
+
     const handleServerMessage = useCallback((msg: AiServerMessage) => {
         dispatch({ type: 'SERVER_MESSAGE', msg });
-    }, []);
+
+        // Notify if the result arrived while the tab is hidden
+        if (msg.type === 'result') {
+            notifyIfHidden('AI response ready');
+        }
+    }, [notifyIfHidden]);
 
     const socket = useAiSocket({
         token,
+        sessionId: state.sessionId,
         onMessage: handleServerMessage,
         onConnected,
         onReconnecting,

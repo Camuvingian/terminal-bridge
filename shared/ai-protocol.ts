@@ -52,6 +52,11 @@ export interface InterruptMessage {
     type: 'interrupt';
 }
 
+export interface ReconnectMessage {
+    type: 'reconnect';
+    sessionId: string;
+}
+
 export interface ListModelsMessage {
     type: 'list-models';
 }
@@ -70,6 +75,7 @@ export type AiClientMessage =
     | QueryMessage
     | PermissionResponseMessage
     | InterruptMessage
+    | ReconnectMessage
     | ListModelsMessage
     | SetModelMessage
     | SetPermissionModeMessage;
@@ -148,6 +154,38 @@ export interface StatusMessage {
     message?: string;
 }
 
+export interface ToolUseSnapshot {
+    toolUseId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    output?: string;
+    isError?: boolean;
+    durationMs?: number;
+    status: 'running' | 'success' | 'error';
+}
+
+export interface SessionSnapshotMessage {
+    type: 'session-snapshot';
+    sessionId: string;
+    model: string;
+    permissionMode: PermissionModeValue;
+    queryStatus: 'idle' | 'querying' | 'waiting-permission';
+    assistantText: string;
+    assistantThinking: string;
+    toolUses: ToolUseSnapshot[];
+    pendingPermission: {
+        requestId: string;
+        toolName: string;
+        input: Record<string, unknown>;
+        description: string;
+    } | null;
+    result: {
+        content: AgentContentBlock[];
+        usage: AgentUsage;
+        durationMs: number;
+    } | null;
+}
+
 export interface ThinkingDeltaMessage {
     type: 'thinking-delta';
     text: string;
@@ -165,4 +203,5 @@ export type AiServerMessage =
     | ResultMessage
     | ErrorMessage
     | ModelListMessage
-    | StatusMessage;
+    | StatusMessage
+    | SessionSnapshotMessage;

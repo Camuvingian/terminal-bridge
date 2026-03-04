@@ -5,6 +5,7 @@ import type {
     AgentUsage,
     AgentModelInfo,
     PermissionModeValue,
+    SessionSnapshotMessage,
 } from '@shared/ai-protocol';
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export interface ChatState {
     streamingMessageId: string | null;
     settingsOpen: boolean;
     theme: string;
+    lastPromptTokens: number;
 }
 
 export const initialChatState: ChatState = {
@@ -62,6 +64,7 @@ export const initialChatState: ChatState = {
     streamingMessageId: null,
     settingsOpen: false,
     theme: 'dark',
+    lastPromptTokens: 0,
 };
 
 // ── Actions ─────────────────────────────────────────────────────────
@@ -85,7 +88,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 toolUses: [],
                 timestamp: Date.now(),
             };
-            return { ...state, messages: [...state.messages, userMsg] };
+            return {
+                ...state,
+                messages: [...state.messages, userMsg],
+                lastPromptTokens: estimateTokenCount(action.prompt),
+            };
         }
 
         case 'SERVER_MESSAGE':
@@ -154,7 +161,11 @@ function handleServerMessage(state: ChatState, msg: AiServerMessage): ChatState 
             };
 
         case 'result': {
-            const s = finalizeAssistantMessage(state, msg.usage, msg.durationMs);
+            // Override inputTokens with the estimated prompt tokens
+            const usage = msg.usage
+                ? { ...msg.usage, inputTokens: state.lastPromptTokens }
+                : undefined;
+            const s = finalizeAssistantMessage(state, usage, msg.durationMs);
             return { ...s, queryStatus: 'idle', streamingMessageId: null };
         }
 
@@ -166,9 +177,78 @@ function handleServerMessage(state: ChatState, msg: AiServerMessage): ChatState 
         case 'model-list':
             return { ...state, models: msg.models, activeModel: msg.activeModel };
 
+        case 'session-snapshot':
+            return handleSessionSnapshot(state, msg);
+
         default:
             return state;
     }
+}
+
+// ── Snapshot handling ─────────────────────────────────────────────────
+
+function handleSessionSnapshot(state: ChatState, snap: SessionSnapshotMessage): ChatState {
+    const hasContent = snap.assistantText || snap.assistantThinking || snap.toolUses.length > 0;
+    if (!hasContent && !snap.result) {
+        // Empty snapshot — just update metadata
+        return {
+            ...state,
+            sessionId: snap.sessionId,
+            activeModel: snap.model,
+            permissionMode: snap.permissionMode,
+            queryStatus: snap.queryStatus,
+        };
+    }
+
+    const toolUses: ToolUseEntry[] = snap.toolUses.map((t) => ({
+        toolUseId: t.toolUseId,
+        toolName: t.toolName,
+        input: t.input,
+        output: t.output,
+        isError: t.isError,
+        durationMs: t.durationMs,
+        status: t.status,
+    }));
+
+    // Build the restored assistant message
+    const restoredMsg: ChatMessage = {
+        id: state.streamingMessageId ?? `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: snap.assistantText,
+        thinking: snap.assistantThinking || undefined,
+        toolUses,
+        usage: snap.result?.usage,
+        durationMs: snap.result?.durationMs,
+        timestamp: Date.now(),
+    };
+
+    // Replace existing streaming message or append
+    let messages: ChatMessage[];
+    if (state.streamingMessageId) {
+        messages = state.messages.map((m) => (m.id === state.streamingMessageId ? restoredMsg : m));
+    } else {
+        messages = [...state.messages, restoredMsg];
+    }
+
+    const isFinished = snap.queryStatus === 'idle';
+
+    return {
+        ...state,
+        messages,
+        sessionId: snap.sessionId,
+        activeModel: snap.model,
+        permissionMode: snap.permissionMode,
+        queryStatus: snap.queryStatus,
+        streamingMessageId: isFinished ? null : restoredMsg.id,
+        pendingPermission: snap.pendingPermission
+            ? {
+                  requestId: snap.pendingPermission.requestId,
+                  toolName: snap.pendingPermission.toolName,
+                  input: snap.pendingPermission.input,
+                  description: snap.pendingPermission.description,
+              }
+            : null,
+    };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -248,6 +328,14 @@ function finalizeAssistantMessage(state: ChatState, usage?: AgentUsage, duration
         ...state,
         messages: state.messages.map((m) => (m.id === state.streamingMessageId ? { ...m, usage, durationMs } : m)),
     };
+}
+
+/**
+ * Rough token estimate that splits on word boundaries and punctuation.
+ * Approximates Claude's BPE tokenizer for English text.
+ */
+function estimateTokenCount(text: string): number {
+    return text.match(/\w+|[^\s\w]/g)?.length ?? 0;
 }
 
 // ── Context ─────────────────────────────────────────────────────────
