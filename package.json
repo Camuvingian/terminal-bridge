@@ -1,6 +1,6 @@
 {
     "name": "terminal-bridge",
-    "version": "1.15.0",
+    "version": "1.16.0",
     "description": "Access a full web terminal and AI chat interface from anywhere. Built with xterm.js, tmux, and the Claude Agent SDK for macOS and Linux.",
     "type": "module",
     "license": "MIT",
