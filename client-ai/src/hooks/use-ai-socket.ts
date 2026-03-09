@@ -1,6 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { AiClientMessage, AiServerMessage } from '@shared/ai-protocol';
 
+const LAST_SEQ_KEY = 'terminal-bridge-last-seq';
+const HEARTBEAT_STALE_MS = 45_000;
+const REPLAY_IDLE_GAP_MS = 200;
+
 interface UseAiSocketOptions {
     token: string;
     sessionId: string | null;
@@ -16,11 +20,36 @@ export interface AiSocket {
     close: () => void;
 }
 
+/** Save lastSeq to sessionStorage. */
+function saveLastSeq(seq: number): void {
+    try {
+        sessionStorage.setItem(LAST_SEQ_KEY, String(seq));
+    } catch { /* ignore */ }
+}
+
+/** Load lastSeq from sessionStorage. */
+function loadLastSeq(): number {
+    try {
+        const raw = sessionStorage.getItem(LAST_SEQ_KEY);
+        return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch {
+        return 0;
+    }
+}
+
+/** Clear lastSeq from sessionStorage. */
+export function clearLastSeq(): void {
+    try {
+        sessionStorage.removeItem(LAST_SEQ_KEY);
+    } catch { /* ignore */ }
+}
+
 /**
  * WebSocket hook for the AI endpoint.
  *
  * Same exponential backoff pattern as the terminal client, but uses
- * JSON text frames instead of binary.
+ * JSON text frames instead of binary. Includes heartbeat staleness
+ * detection and animated replay on reconnect.
  */
 export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconnecting, onDisconnect, onError }: UseAiSocketOptions): AiSocket {
     const wsRef = useRef<WebSocket | null>(null);
@@ -36,6 +65,19 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
     const onErrorRef = useRef(onError);
     const sessionIdRef = useRef(sessionId);
 
+    // Sequence tracking
+    const lastReceivedSeq = useRef(loadLastSeq());
+
+    // Heartbeat staleness
+    const lastMessageTime = useRef(Date.now());
+    const heartbeatCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Animated replay state
+    const replayingRef = useRef(false);
+    const replayQueueRef = useRef<AiServerMessage[]>([]);
+    const replayIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const replayRafRef = useRef<number | null>(null);
+
     useEffect(() => {
         onMessageRef.current = onMessage;
         onConnectedRef.current = onConnected;
@@ -47,6 +89,67 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
     useEffect(() => {
         mountedRef.current = true;
         intentionalClose.current = false;
+
+        function drainReplayQueue() {
+            if (replayQueueRef.current.length === 0) {
+                replayingRef.current = false;
+                return;
+            }
+
+            // Dispatch a batch of messages per frame
+            const batch = replayQueueRef.current.splice(0, 5);
+            for (const msg of batch) {
+                onMessageRef.current(msg);
+            }
+
+            if (replayQueueRef.current.length > 0) {
+                replayRafRef.current = requestAnimationFrame(drainReplayQueue);
+            } else {
+                replayingRef.current = false;
+                replayRafRef.current = null;
+            }
+        }
+
+        function handleIncomingMessage(msg: AiServerMessage) {
+            lastMessageTime.current = Date.now();
+
+            // Track sequence numbers
+            if (msg.seq !== undefined) {
+                lastReceivedSeq.current = msg.seq;
+                saveLastSeq(msg.seq);
+            }
+
+            // Heartbeat — update timestamp only, skip dispatch
+            if (msg.type === 'heartbeat') {
+                return;
+            }
+
+            // Reset seq on init (new session)
+            if (msg.type === 'init') {
+                lastReceivedSeq.current = 0;
+                saveLastSeq(0);
+            }
+
+            // During replay, queue messages for animated dispatch
+            if (replayingRef.current) {
+                replayQueueRef.current.push(msg);
+
+                // Reset idle timer — when messages stop arriving for
+                // REPLAY_IDLE_GAP_MS, end replay mode
+                if (replayIdleTimer.current) {
+                    clearTimeout(replayIdleTimer.current);
+                }
+                replayIdleTimer.current = setTimeout(() => {
+                    // All messages received, start draining
+                    if (replayRafRef.current === null) {
+                        replayRafRef.current = requestAnimationFrame(drainReplayQueue);
+                    }
+                }, REPLAY_IDLE_GAP_MS);
+                return;
+            }
+
+            onMessageRef.current(msg);
+        }
 
         function connect() {
             if (!mountedRef.current) {
@@ -60,12 +163,19 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
 
             ws.onopen = () => {
                 reconnectDelay.current = 1000;
+                lastMessageTime.current = Date.now();
                 onConnectedRef.current();
 
                 // If we have an active session, send a reconnect message
-                // so the server replays the snapshot
+                // with lastSeq for incremental replay
                 if (sessionIdRef.current) {
-                    ws.send(JSON.stringify({ type: 'reconnect', sessionId: sessionIdRef.current }));
+                    const lastSeq = lastReceivedSeq.current;
+                    replayingRef.current = lastSeq > 0;
+                    ws.send(JSON.stringify({
+                        type: 'reconnect',
+                        sessionId: sessionIdRef.current,
+                        lastSeq: lastSeq > 0 ? lastSeq : undefined,
+                    }));
                 }
             };
 
@@ -84,7 +194,7 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
                         return;
                     }
 
-                    onMessageRef.current(msg);
+                    handleIncomingMessage(msg);
                 } catch {
                     // Invalid JSON — ignore
                 }
@@ -109,6 +219,19 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
         }
 
         connect();
+
+        // ── Heartbeat staleness check ───────────────────────────────
+        heartbeatCheckInterval.current = setInterval(() => {
+            const ws = wsRef.current;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            if (Date.now() - lastMessageTime.current > HEARTBEAT_STALE_MS) {
+                console.log('[~] Heartbeat stale, forcing reconnect');
+                ws.close();
+            }
+        }, 10_000);
 
         // ── Visibility-based instant reconnect ─────────────────────
         // When the user returns to the tab (e.g., after mobile minimize),
@@ -139,6 +262,15 @@ export function useAiSocket({ token, sessionId, onMessage, onConnected, onReconn
             document.removeEventListener('visibilitychange', onVisibilityChange);
             if (reconnectTimer.current) {
                 clearTimeout(reconnectTimer.current);
+            }
+            if (heartbeatCheckInterval.current) {
+                clearInterval(heartbeatCheckInterval.current);
+            }
+            if (replayIdleTimer.current) {
+                clearTimeout(replayIdleTimer.current);
+            }
+            if (replayRafRef.current !== null) {
+                cancelAnimationFrame(replayRafRef.current);
             }
             if (wsRef.current) {
                 wsRef.current.close();

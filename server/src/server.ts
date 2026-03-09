@@ -9,6 +9,7 @@ import { ServerCmd } from '../../shared/protocol.js';
 import { TerminalConnectionHandler, authenticateTerminalConnection } from './terminal-handler.js';
 import { AiConnectionHandler, authenticateAiConnection } from './ai-handler.js';
 import { AiSession } from './ai-session.js';
+import { SessionStore } from './session-store.js';
 import { ProviderRegistry } from './providers/provider-registry.js';
 import { ClaudeProvider } from './providers/claude-provider.js';
 
@@ -29,7 +30,9 @@ class TerminalBridgeServer {
     private readonly terminalWss = new WebSocketServer({ noServer: true });
     private readonly aiWss = new WebSocketServer({ noServer: true });
     private readonly registry = new ProviderRegistry();
+    private readonly store = new SessionStore();
     private readonly sessions = new Map<string, AiSession>();
+    private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
     private readonly port: number;
     private readonly authToken: string;
@@ -52,6 +55,10 @@ class TerminalBridgeServer {
         this.configureRoutes();
         this.configureUpgrade();
         this.configureWebSockets();
+
+        // Cleanup stale session files on startup and hourly
+        this.store.cleanup();
+        this.cleanupInterval = setInterval(() => this.store.cleanup(), 60 * 60 * 1000);
     }
 
     // ── Bootstrap ───────────────────────────────────────────────────
@@ -152,10 +159,12 @@ class TerminalBridgeServer {
                     const session = new AiSession(sessionId, (id) => {
                         console.log(`[~] Cleaning up expired session ${id}`);
                         this.sessions.delete(id);
-                    });
+                    }, this.store);
                     this.sessions.set(sessionId, session);
                     return session;
                 },
+                this.store,
+                (session) => this.sessions.set(session.sessionId, session),
             );
         });
     }
@@ -183,6 +192,9 @@ class TerminalBridgeServer {
     }
 
     async shutdown(): Promise<void> {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+        }
         await this.registry.disposeAll();
         this.terminalWss.close();
         this.aiWss.close();

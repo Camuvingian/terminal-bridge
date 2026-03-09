@@ -2,12 +2,20 @@ import { WebSocket } from 'ws';
 import type { AiClientMessage, AiServerMessage, PermissionModeValue } from '../../shared/ai-protocol.js';
 import type { ProviderRegistry } from './providers/provider-registry.js';
 import type { AiSession } from './ai-session.js';
+import type { SessionStore } from './session-store.js';
+import { AiSession as AiSessionClass } from './ai-session.js';
 
 /** Callback to look up an existing session by ID. */
 export type GetSession = (sessionId: string) => AiSession | undefined;
 
 /** Callback to create a new session (returns the session and its ID). */
 export type CreateSession = () => AiSession;
+
+/** Callback to register a recovered session in the server's sessions Map. */
+export type RegisterSession = (session: AiSession) => void;
+
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const PONG_TIMEOUT_MS = 60_000;
 
 /**
  * Thin WebSocket adapter for a single AI connection.
@@ -17,19 +25,47 @@ export type CreateSession = () => AiSession;
  * session keeps running; when a new socket reconnects it attaches to
  * the same session and receives a snapshot of accumulated state.
  *
- * SRP: owns only the WebSocket ↔ Session bridge for one connection.
+ * SRP: owns only the WebSocket / Session bridge for one connection.
  */
 export class AiConnectionHandler {
     private session: AiSession | null = null;
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    private lastPong = Date.now();
 
     constructor(
         private ws: WebSocket,
         private readonly registry: ProviderRegistry,
         private readonly getSession: GetSession,
         private readonly createSession: CreateSession,
+        private readonly store?: SessionStore,
+        private readonly registerSession?: RegisterSession,
     ) {
         this.ws.on('message', (raw: Buffer) => this.onMessage(raw));
         this.ws.on('close', () => this.onClose());
+        this.ws.on('pong', () => {
+            this.lastPong = Date.now();
+        });
+        this.startHeartbeat();
+    }
+
+    // ── Heartbeat ────────────────────────────────────────────────────
+
+    private startHeartbeat(): void {
+        this.heartbeatInterval = setInterval(() => {
+            if (this.ws.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            // Check for pong timeout
+            if (Date.now() - this.lastPong > PONG_TIMEOUT_MS) {
+                console.log('[~] AI client pong timeout, closing connection');
+                this.ws.terminate();
+                return;
+            }
+
+            this.ws.ping();
+            this.send({ type: 'heartbeat' });
+        }, HEARTBEAT_INTERVAL_MS);
     }
 
     // ── Inbound ─────────────────────────────────────────────────────
@@ -48,7 +84,7 @@ export class AiConnectionHandler {
                 this.handleQuery(msg.prompt, msg.sessionId);
                 break;
             case 'reconnect':
-                this.handleReconnect(msg.sessionId);
+                this.handleReconnect(msg.sessionId, msg.lastSeq);
                 break;
             case 'permission-response':
                 this.provider.respondToPermission(msg.requestId, msg.granted);
@@ -71,6 +107,11 @@ export class AiConnectionHandler {
     }
 
     private onClose(): void {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+
         if (this.session) {
             console.log(`[~] AI client disconnected, session ${this.session.sessionId} continues running`);
             this.session.detach();
@@ -98,8 +139,22 @@ export class AiConnectionHandler {
         });
     }
 
-    private handleReconnect(sessionId: string): void {
-        const existing = this.getSession(sessionId);
+    private handleReconnect(sessionId: string, lastSeq?: number): void {
+        // 1. Try in-memory session
+        let existing = this.getSession(sessionId);
+
+        // 2. Try disk recovery
+        if (!existing && this.store && this.registerSession) {
+            const recovered = AiSessionClass.fromStore(sessionId, this.store, (id) => {
+                console.log(`[~] Cleaning up expired recovered session ${id}`);
+            });
+            if (recovered) {
+                console.log(`[+] Recovered session ${sessionId} from disk`);
+                this.registerSession(recovered);
+                existing = recovered;
+            }
+        }
+
         if (!existing) {
             this.send({ type: 'session-expired', sessionId });
             return;
@@ -107,7 +162,16 @@ export class AiConnectionHandler {
 
         console.log(`[+] AI client reconnected to session ${sessionId}`);
         this.session = existing;
-        existing.attach(this.makeSink());
+        const sink = this.makeSink();
+        existing.attach(sink);
+
+        // 3. Try incremental replay from lastSeq
+        if (lastSeq !== undefined && existing.replayFrom(lastSeq, sink)) {
+            console.log(`[+] Replayed messages after seq ${lastSeq}`);
+            return;
+        }
+
+        // 4. Fall back to snapshot
         existing.sendSnapshot();
     }
 

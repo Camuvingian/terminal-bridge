@@ -55,6 +55,7 @@ export interface InterruptMessage {
 export interface ReconnectMessage {
     type: 'reconnect';
     sessionId: string;
+    lastSeq?: number;
 }
 
 export interface ListModelsMessage {
@@ -196,7 +197,11 @@ export interface SessionExpiredMessage {
     sessionId: string;
 }
 
-export type AiServerMessage =
+export interface HeartbeatMessage {
+    type: 'heartbeat';
+}
+
+export type AiServerMessage = (
     | InitMessage
     | TextDeltaMessage
     | ThinkingDeltaMessage
@@ -210,4 +215,6 @@ export type AiServerMessage =
     | ModelListMessage
     | StatusMessage
     | SessionSnapshotMessage
-    | SessionExpiredMessage;
+    | SessionExpiredMessage
+    | HeartbeatMessage
+) & { seq?: number };

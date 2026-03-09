@@ -7,6 +7,7 @@ import type {
     SessionSnapshotMessage,
 } from '../../shared/ai-protocol.js';
 import type { AgentProvider } from './providers/agent-provider.js';
+import type { SessionStore } from './session-store.js';
 
 /** Callback that sends a message to the current WebSocket (if attached). */
 export type SessionSink = (msg: AiServerMessage) => void;
@@ -14,7 +15,7 @@ export type SessionSink = (msg: AiServerMessage) => void;
 /** Called by the server when a session's cleanup timer fires. */
 export type SessionCleanup = (sessionId: string) => void;
 
-const CLEANUP_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
+const CLEANUP_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Owns the lifecycle of a single AI query.
@@ -22,6 +23,9 @@ const CLEANUP_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
  * Decouples the query from the WebSocket connection: the query runs to
  * completion regardless of whether a client is attached.  Messages are
  * buffered in a snapshot so a reconnecting client can catch up.
+ *
+ * When a `SessionStore` is provided, every emitted message is persisted
+ * to disk so sessions survive server restarts.
  */
 export class AiSession {
     readonly sessionId: string;
@@ -29,6 +33,7 @@ export class AiSession {
     private sink: SessionSink | null = null;
     private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
     private queryStatus: 'idle' | 'querying' | 'waiting-permission' = 'idle';
+    private seq = 0;
 
     // ── Snapshot state ───────────────────────────────────────────────
     private assistantText = '';
@@ -42,8 +47,44 @@ export class AiSession {
     constructor(
         sessionId: string,
         private readonly onCleanup: SessionCleanup,
+        private readonly store?: SessionStore,
     ) {
         this.sessionId = sessionId;
+    }
+
+    /**
+     * Reconstruct an AiSession from disk after a server restart.
+     * Loads the snapshot to restore internal state, marks query idle.
+     */
+    static fromStore(sessionId: string, store: SessionStore, onCleanup: SessionCleanup): AiSession | null {
+        if (!store.exists(sessionId)) {
+            return null;
+        }
+
+        const session = new AiSession(sessionId, onCleanup, store);
+
+        // Restore snapshot state from disk
+        const snapshot = store.loadSnapshot(sessionId);
+        if (snapshot) {
+            session.model = snapshot.model;
+            session.permissionMode = snapshot.permissionMode;
+            session.assistantText = snapshot.assistantText;
+            session.assistantThinking = snapshot.assistantThinking;
+            session.toolUses = [...snapshot.toolUses];
+            session.pendingPermission = snapshot.pendingPermission;
+            session.resultData = snapshot.result;
+        }
+
+        // After a restart, any in-flight query is dead — mark idle
+        session.queryStatus = 'idle';
+
+        // Restore seq counter from persisted messages
+        const allMessages = store.loadFrom(sessionId, 0);
+        if (allMessages.length > 0) {
+            session.seq = allMessages[allMessages.length - 1].seq;
+        }
+
+        return session;
     }
 
     // ── Attach / Detach ──────────────────────────────────────────────
@@ -97,10 +138,33 @@ export class AiSession {
         }
     }
 
+    // ── Replay from store ────────────────────────────────────────────
+
+    replayFrom(lastSeq: number, sink: SessionSink): boolean {
+        if (!this.store) {
+            return false;
+        }
+
+        const messages = this.store.loadFrom(this.sessionId, lastSeq);
+        if (messages.length === 0) {
+            return false;
+        }
+
+        for (const { message } of messages) {
+            sink(message);
+        }
+        return true;
+    }
+
     // ── Snapshot ─────────────────────────────────────────────────────
 
     sendSnapshot(): void {
-        const snapshot: SessionSnapshotMessage = {
+        const snapshot = this.buildSnapshot();
+        this.emit(snapshot);
+    }
+
+    private buildSnapshot(): SessionSnapshotMessage {
+        return {
             type: 'session-snapshot',
             sessionId: this.sessionId,
             model: this.model,
@@ -112,7 +176,12 @@ export class AiSession {
             pendingPermission: this.pendingPermission,
             result: this.resultData,
         };
-        this.emit(snapshot);
+    }
+
+    private persistSnapshot(): void {
+        if (this.store) {
+            this.store.saveSnapshot(this.sessionId, this.buildSnapshot());
+        }
     }
 
     private updateSnapshot(msg: AiServerMessage): void {
@@ -185,11 +254,25 @@ export class AiSession {
                 this.queryStatus = 'idle';
                 break;
         }
+
+        // Persist snapshot on key state transitions
+        if (msg.type === 'result' || msg.type === 'error' || msg.type === 'init') {
+            this.persistSnapshot();
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
 
     private emit(msg: AiServerMessage): void {
+        // Stamp sequence number and persist (skip heartbeats and snapshots)
+        if (msg.type !== 'heartbeat' && msg.type !== 'session-snapshot') {
+            this.seq++;
+            msg.seq = this.seq;
+            if (this.store) {
+                this.store.append(this.sessionId, this.seq, msg);
+            }
+        }
+
         if (this.sink) {
             this.sink(msg);
         }

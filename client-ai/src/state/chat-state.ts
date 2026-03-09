@@ -7,6 +7,7 @@ import type {
     PermissionModeValue,
     SessionSnapshotMessage,
 } from '@shared/ai-protocol';
+import { clearLastSeq } from '../hooks/use-ai-socket';
 
 // ── Persistence Helpers ──────────────────────────────────────────────
 
@@ -166,6 +167,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         case 'NEW_CHAT':
             clearSessionId();
             clearChatMessages();
+            clearLastSeq();
             return {
                 ...state,
                 messages: [],
